@@ -1,5 +1,4 @@
-#ifndef WTRACKTEXT_H
-#define WTRACKTEXT_H
+#pragma once
 
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -7,32 +6,44 @@
 
 #include "preferences/usersettings.h"
 #include "track/track.h"
+#include "util/parented_ptr.h"
+#include "widget/trackdroptarget.h"
 #include "widget/wlabel.h"
 
-class WTrackText : public WLabel {
+class TrackCollectionManager;
+class WTrackMenu;
+
+class WTrackText : public WLabel, public TrackDropTarget {
     Q_OBJECT
   public:
-    WTrackText(const char* group, UserSettingsPointer pConfig, QWidget *pParent);
+    WTrackText(
+            QWidget* pParent,
+            UserSettingsPointer pConfig,
+            TrackCollectionManager* pTrackCollectionManager,
+            const QString& group);
+    ~WTrackText() override;
 
   signals:
-    void trackDropped(QString fileName, QString group);
+    void trackDropped(QString fileName, QString group) override;
+    void cloneDeck(QString source_group, QString target_group) override;
 
   public slots:
     void slotTrackLoaded(TrackPointer track);
     void slotLoadingTrack(TrackPointer pNewTrack, TrackPointer pOldTrack);
 
   private slots:
-    void updateLabel(Track*);
+    void slotTrackChanged(TrackId);
+    void contextMenuEvent(QContextMenuEvent* event) override;
 
   private:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
 
-    const char* m_pGroup;
+    void updateLabel();
+
+    const QString m_group;
     UserSettingsPointer m_pConfig;
     TrackPointer m_pCurrentTrack;
+    const parented_ptr<WTrackMenu> m_pTrackMenu;
 };
-
-
-#endif /* WTRACKTEXT_H */

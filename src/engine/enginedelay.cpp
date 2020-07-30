@@ -25,21 +25,21 @@
 namespace {
 constexpr double kdMaxDelayPot = 500;
 const int kiMaxDelay = (kdMaxDelayPot + 8) / 1000 *
-    mixxx::AudioSignal::SampleRate::kValueMax * mixxx::kEngineChannelCount;
+    mixxx::audio::SampleRate::kValueMax * mixxx::kEngineChannelCount;
 } // anonymous namespace
 
-EngineDelay::EngineDelay(const char* group, ConfigKey delayControl, bool bPersist)
+EngineDelay::EngineDelay(const QString& group, ConfigKey delayControl, bool bPersist)
         : m_iDelayPos(0),
           m_iDelay(0) {
     m_pDelayBuffer = SampleUtil::alloc(kiMaxDelay);
     SampleUtil::clear(m_pDelayBuffer, kiMaxDelay);
     m_pDelayPot = new ControlPotmeter(delayControl, 0, kdMaxDelayPot, false, true, false, bPersist);
     m_pDelayPot->setDefaultValue(0);
-    connect(m_pDelayPot, SIGNAL(valueChanged(double)), this,
-            SLOT(slotDelayChanged()), Qt::DirectConnection);
+    connect(m_pDelayPot, &ControlObject::valueChanged, this,
+            &EngineDelay::slotDelayChanged, Qt::DirectConnection);
 
     m_pSampleRate = new ControlProxy(group, "samplerate", this);
-    m_pSampleRate->connectValueChanged(SLOT(slotDelayChanged()), Qt::DirectConnection);
+    m_pSampleRate->connectValueChanged(this, &EngineDelay::slotDelayChanged, Qt::DirectConnection);
 }
 
 EngineDelay::~EngineDelay() {

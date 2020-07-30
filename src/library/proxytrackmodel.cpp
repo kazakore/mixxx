@@ -1,13 +1,14 @@
 // proxytrackmodel.cpp
 // Created 10/22/2009 by RJ Ryan (rryan@mit.edu)
 
+#include "library/proxytrackmodel.h"
+
 #include <QVariant>
 
-#include "library/proxytrackmodel.h"
 #include "util/assert.h"
 
 ProxyTrackModel::ProxyTrackModel(QAbstractItemModel* pTrackModel,
-                                 bool bHandleSearches)
+        bool bHandleSearches)
         // ProxyTrackModel proxies settings requests to the composed TrackModel,
         // don't initialize its TrackModel with valid parameters.
         : TrackModel(QSqlDatabase(), ""),
@@ -23,18 +24,32 @@ ProxyTrackModel::ProxyTrackModel(QAbstractItemModel* pTrackModel,
 ProxyTrackModel::~ProxyTrackModel() {
 }
 
+TrackModel::SortColumnId ProxyTrackModel::sortColumnIdFromColumnIndex(int index) {
+    return (m_pTrackModel ? m_pTrackModel->sortColumnIdFromColumnIndex(index)
+                          : TrackModel::sortColumnIdFromColumnIndex(index));
+}
+
+int ProxyTrackModel::columnIndexFromSortColumnId(TrackModel::SortColumnId sortColumn) {
+    return (m_pTrackModel ? m_pTrackModel->columnIndexFromSortColumnId(sortColumn)
+                          : TrackModel::columnIndexFromSortColumnId(sortColumn));
+}
+
 TrackId ProxyTrackModel::getTrackId(const QModelIndex& index) const {
     QModelIndex indexSource = mapToSource(index);
     return m_pTrackModel ? m_pTrackModel->getTrackId(indexSource) : TrackId();
 }
 
-const QLinkedList<int> ProxyTrackModel::getTrackRows(TrackId trackId) const {
-    return m_pTrackModel ? m_pTrackModel->getTrackRows(trackId) : QLinkedList<int>();
+const QVector<int> ProxyTrackModel::getTrackRows(TrackId trackId) const {
+    return m_pTrackModel ? m_pTrackModel->getTrackRows(trackId) : QVector<int>();
 }
 
 TrackPointer ProxyTrackModel::getTrack(const QModelIndex& index) const {
     QModelIndex indexSource = mapToSource(index);
     return m_pTrackModel ? m_pTrackModel->getTrack(indexSource) : TrackPointer();
+}
+
+TrackPointer ProxyTrackModel::getTrackByRef(const TrackRef& trackRef) const {
+    return m_pTrackModel ? m_pTrackModel->getTrackByRef(trackRef) : TrackPointer();
 }
 
 QString ProxyTrackModel::getTrackLocation(const QModelIndex& index) const {
@@ -79,7 +94,7 @@ void ProxyTrackModel::removeTracks(const QModelIndexList& indices) {
 }
 
 void ProxyTrackModel::moveTrack(const QModelIndex& sourceIndex,
-                                const QModelIndex& destIndex) {
+        const QModelIndex& destIndex) {
     QModelIndex sourceIndexSource = mapToSource(sourceIndex);
     QModelIndex destIndexSource = mapToSource(destIndex);
     if (m_pTrackModel) {
@@ -91,12 +106,12 @@ QAbstractItemDelegate* ProxyTrackModel::delegateForColumn(const int i, QObject* 
     return m_pTrackModel ? m_pTrackModel->delegateForColumn(i, pParent) : NULL;
 }
 
-TrackModel::CapabilitiesFlags ProxyTrackModel::getCapabilities() const {
-    return m_pTrackModel ? m_pTrackModel->getCapabilities() : TrackModel::TRACKMODELCAPS_NONE;
+TrackModel::Capabilities ProxyTrackModel::getCapabilities() const {
+    return m_pTrackModel ? m_pTrackModel->getCapabilities() : Capability::None;
 }
 
 bool ProxyTrackModel::filterAcceptsRow(int sourceRow,
-                                       const QModelIndex& sourceParent) const {
+        const QModelIndex& sourceParent) const {
     if (!m_bHandleSearches)
         return QSortFilterProxyModel::filterAcceptsRow(sourceRow, sourceParent);
 
@@ -116,8 +131,8 @@ bool ProxyTrackModel::filterAcceptsRow(int sourceRow,
         int i = iter.next();
         QModelIndex index = itemModel->index(sourceRow, i, sourceParent);
         QVariant data = itemModel->data(index);
-        if (qVariantCanConvert<QString>(data)) {
-            QString strData = qVariantValue<QString>(data);
+        if (data.canConvert(QMetaType::QString)) {
+            QString strData = data.toString();
             if (strData.contains(filter))
                 rowMatches = true;
         }
@@ -144,4 +159,3 @@ void ProxyTrackModel::sort(int column, Qt::SortOrder order) {
         QSortFilterProxyModel::sort(column, order);
     }
 }
-

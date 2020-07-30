@@ -58,7 +58,6 @@ class SoundDeviceNetwork : public SoundDevice {
     QSharedPointer<EngineNetworkStream> m_pNetworkStream;
     std::unique_ptr<FIFO<CSAMPLE> > m_outputFifo;
     std::unique_ptr<FIFO<CSAMPLE> > m_inputFifo;
-    bool m_outputDrift;
     bool m_inputDrift;
 
     std::unique_ptr<ControlProxy> m_pMasterAudioLatencyUsage;
@@ -69,7 +68,6 @@ class SoundDeviceNetwork : public SoundDevice {
     bool m_denormals;
     qint64 m_targetTime;
     PerformanceTimer m_clkRefTimer;
-    double m_lastCallbackEntrytoDacSecs;
 };
 
 class SoundDeviceNetworkThread : public QThread {
@@ -89,8 +87,7 @@ class SoundDeviceNetworkThread : public QThread {
     }
 
   private:
-    void run() {
-
+    void run() override {
 #ifdef __LINUX__
         struct sched_param spm = { 0 };
         spm.sched_priority = 1;

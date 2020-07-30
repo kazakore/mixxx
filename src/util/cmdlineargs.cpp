@@ -1,5 +1,7 @@
 #include <stdio.h>
 
+#include <QStandardPaths>
+
 #include "util/cmdlineargs.h"
 #include "util/version.h"
 
@@ -21,8 +23,29 @@ CmdlineArgs::CmdlineArgs()
 #else
     // TODO(XXX) Trailing slash not needed anymore as we switches from String::append
     // to QDir::filePath elsewhere in the code. This is candidate for removal.
-    m_settingsPath(QDesktopServices::storageLocation(QDesktopServices::DataLocation).append("/")) {
+    m_settingsPath(QStandardPaths::writableLocation(QStandardPaths::DataLocation).append("/")) {
 #endif
+}
+
+namespace {
+    bool parseLogLevel(
+        QLatin1String logLevel,
+        mixxx::LogLevel *pLogLevel) {
+        if (logLevel == QLatin1String("trace")) {
+            *pLogLevel = mixxx::LogLevel::Trace;
+        } else if (logLevel == QLatin1String("debug")) {
+            *pLogLevel = mixxx::LogLevel::Debug;
+        } else if (logLevel == QLatin1String("info")) {
+            *pLogLevel = mixxx::LogLevel::Info;
+        } else if (logLevel == QLatin1String("warning")) {
+            *pLogLevel = mixxx::LogLevel::Warning;
+        } else if (logLevel == QLatin1String("critical")) {
+            *pLogLevel = mixxx::LogLevel::Critical;
+        } else {
+            return false;
+        }
+        return true;
+    }
 }
 
 bool CmdlineArgs::Parse(int &argc, char **argv) {
@@ -59,36 +82,16 @@ bool CmdlineArgs::Parse(int &argc, char **argv) {
         } else if (argv[i] == QString("--logLevel") && i+1 < argc) {
             logLevelSet = true;
             auto level = QLatin1String(argv[i+1]);
-            if (level == "trace") {
-                m_logLevel = mixxx::LogLevel::Trace;
-            } else if (level == "debug") {
-                m_logLevel = mixxx::LogLevel::Debug;
-            } else if (level == "info") {
-                m_logLevel = mixxx::LogLevel::Info;
-            } else if (level == "warning") {
-                m_logLevel = mixxx::LogLevel::Warning;
-            } else if (level == "critical") {
-                m_logLevel = mixxx::LogLevel::Critical;
-            } else {
+            if (!parseLogLevel(level, &m_logLevel)) {
                 fputs("\nlogLevel argument wasn't 'trace', 'debug', 'info', 'warning', or 'critical'! Mixxx will only output\n\
 warnings and errors to the console unless this is set properly.\n", stdout);
             }
             i++;
         } else if (argv[i] == QString("--logFlushLevel") && i+1 < argc) {
             auto level = QLatin1String(argv[i+1]);
-            if (level == "trace") {
-                m_logFlushLevel = mixxx::LogLevel::Trace;
-            } else if (level == "debug") {
-                m_logFlushLevel = mixxx::LogLevel::Debug;
-            } else if (level == "info") {
-                m_logFlushLevel = mixxx::LogLevel::Info;
-            } else if (level == "warning") {
-                m_logFlushLevel = mixxx::LogLevel::Warning;
-            } else if (level == "critical") {
-                m_logFlushLevel = mixxx::LogLevel::Critical;
-            } else {
+            if (!parseLogLevel(level, &m_logFlushLevel)) {
                 fputs("\nlogFushLevel argument wasn't 'trace', 'debug', 'info', 'warning', or 'critical'! Mixxx will only flush messages to mixxx.log\n\
-when a critical error occours unless this is set properly.\n", stdout);
+when a critical error occurs unless this is set properly.\n", stdout);
             }
             i++;
         } else if (QString::fromLocal8Bit(argv[i]).contains("--midiDebug", Qt::CaseInsensitive) ||

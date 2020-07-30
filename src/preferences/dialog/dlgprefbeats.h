@@ -9,6 +9,8 @@
 #include <QString>
 #include <QList>
 
+#include "analyzer/plugins/analyzerplugin.h"
+#include "preferences/beatdetectionsettings.h"
 #include "preferences/usersettings.h"
 #include "preferences/dlgpreferencepage.h"
 #include "preferences/dialog/ui_dlgprefbeatsdlg.h"
@@ -19,11 +21,13 @@ class DlgPrefBeats : public DlgPreferencePage, public Ui::DlgBeatsDlg {
     DlgPrefBeats(QWidget *parent, UserSettingsPointer _config);
     virtual ~DlgPrefBeats();
 
+    QUrl helpUrl() const override;
+
   public slots:
     // Apply changes to widget
-    void slotApply();
-    void slotUpdate();
-    void slotResetToDefaults();
+    void slotApply() override;
+    void slotUpdate() override;
+    void slotResetToDefaults() override;
 
   private slots:
     void pluginSelected(int i);
@@ -36,17 +40,18 @@ class DlgPrefBeats : public DlgPreferencePage, public Ui::DlgBeatsDlg {
     void slotReanalyzeChanged(int value);
 
   private:
-    void populate();
     void loadSettings();
 
-    // Pointer to config object
-    UserSettingsPointer m_pconfig;
-    QList<QString> m_listName;
-    QList<QString> m_listLibrary, m_listIdentifier;
-    QString m_selectedAnalyzer;
+    BeatDetectionSettings m_bpmSettings;
+    QList<mixxx::AnalyzerPluginInfo> m_availablePlugins;
+    QString m_selectedAnalyzerId;
     int m_minBpm;
     int m_maxBpm;
-    bool m_banalyzerEnabled, m_bfixedtempoEnabled, m_boffsetEnabled, m_FastAnalysisEnabled, m_bReanalyze;
+    bool m_banalyzerEnabled;
+    bool m_bfixedtempoEnabled;
+    bool m_boffsetEnabled;
+    bool m_FastAnalysisEnabled;
+    bool m_bReanalyze;
 };
 
 #endif // DLGPREFBEATS_H

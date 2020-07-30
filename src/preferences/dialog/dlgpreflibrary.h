@@ -1,14 +1,16 @@
 #ifndef DLGPREFLIBRARY_H
 #define DLGPREFLIBRARY_H
 
+#include <QFont>
 #include <QStandardItemModel>
 #include <QWidget>
-#include <QFont>
 
-#include "preferences/dialog/ui_dlgpreflibrarydlg.h"
-#include "preferences/usersettings.h"
+#include "defs_urls.h"
 #include "library/library.h"
+#include "library/library_preferences.h"
+#include "preferences/dialog/ui_dlgpreflibrarydlg.h"
 #include "preferences/dlgpreferencepage.h"
+#include "preferences/usersettings.h"
 
 /**
   *@author Tue & Ken Haste Andersen
@@ -17,10 +19,10 @@
 class DlgPrefLibrary : public DlgPreferencePage, public Ui::DlgPrefLibraryDlg  {
     Q_OBJECT
   public:
-    enum TrackLoadAction {
-        LOAD_TRACK_DECK,  // Load track to next available deck.
-        ADD_TRACK_BOTTOM, // Add track to Auto-DJ Queue (bottom).
-        ADD_TRACK_TOP     // Add track to Auto-DJ Queue (top).
+    enum TrackDoubleClickAction {
+        LOAD_TO_DECK,
+        ADD_TO_AUTODJ_BOTTOM,
+        ADD_TO_AUTODJ_TOP
     };
 
     DlgPrefLibrary(
@@ -29,20 +31,21 @@ class DlgPrefLibrary : public DlgPreferencePage, public Ui::DlgPrefLibraryDlg  {
             Library* pLibrary);
     ~DlgPrefLibrary() override {}
 
+    QUrl helpUrl() const override;
+
   public slots:
     // Common preference page slots.
-    void slotUpdate();
-    void slotShow();
-    void slotHide();
-    void slotResetToDefaults();
-    void slotApply();
-    void slotCancel();
+    void slotUpdate() override;
+    void slotShow() override;
+    void slotHide() override;
+    void slotResetToDefaults() override;
+    void slotApply() override;
+    void slotCancel() override;
 
     // Dialog to browse for music file directory
     void slotAddDir();
     void slotRemoveDir();
     void slotRelocateDir();
-    void slotExtraPlugins();
 
   signals:
     void apply();
@@ -50,13 +53,12 @@ class DlgPrefLibrary : public DlgPreferencePage, public Ui::DlgPrefLibraryDlg  {
     void requestAddDir(QString dir);
     void requestRemoveDir(QString dir, Library::RemovalType removalType);
     void requestRelocateDir(QString currentDir, QString newDir);
-    void setTrackTableFont(const QFont& font);
-    void setTrackTableRowHeight(int rowHeight);
 
   private slots:
     void slotRowHeightValueChanged(int);
     void slotSelectFont();
     void slotSyncTrackMetadataExportToggled();
+    void slotSearchDebouncingTimeoutMillisChanged(int);
 
   private:
     void initializeDirList();

@@ -10,6 +10,29 @@
 
 #include "controllers/defs_controllers.h"
 
+namespace {
+bool presetInfoNameComparator(const PresetInfo &a, const PresetInfo &b) {
+    if (a.getDirPath() == b.getDirPath()) {
+        // FIXME: Mixxx copies every loaded mapping into the user mapping folder
+        // with a different file name. This is confusing, especially when developing
+        // a mapping and working on it in the user mapping folder. Sorting
+        // by file path here is a quick hack to keep the identically named mappings
+        // in a consistent order.
+        if (a.getName() == b.getName()) {
+            return a.getPath() < b.getPath();
+        } else {
+            return a.getName() < b.getName();
+        }
+    } else {
+        return a.getDirPath() < b.getDirPath();
+    }
+}
+}
+
+PresetInfoEnumerator::PresetInfoEnumerator(const QString& searchPath)
+        : PresetInfoEnumerator(QList<QString>{searchPath}) {
+}
+
 PresetInfoEnumerator::PresetInfoEnumerator(const QStringList& searchPaths)
         : m_controllerDirPaths(searchPaths) {
     loadSupportedPresets();
@@ -29,6 +52,10 @@ QList<PresetInfo> PresetInfoEnumerator::getPresetsByExtension(const QString& ext
 }
 
 void PresetInfoEnumerator::loadSupportedPresets() {
+    m_midiPresets.clear();
+    m_hidPresets.clear();
+    m_bulkPresets.clear();
+
     for (const QString& dirPath : m_controllerDirPaths) {
         QDirIterator it(dirPath);
         while (it.hasNext()) {
@@ -44,6 +71,10 @@ void PresetInfoEnumerator::loadSupportedPresets() {
             }
         }
     }
+
+    std::sort(m_midiPresets.begin(), m_midiPresets.end(), presetInfoNameComparator);
+    std::sort(m_hidPresets.begin(), m_hidPresets.end(), presetInfoNameComparator);
+    std::sort(m_bulkPresets.begin(), m_bulkPresets.end(), presetInfoNameComparator);
 
     qDebug() << "Extension" << MIDI_PRESET_EXTENSION << "total"
              << m_midiPresets.length() << "presets";

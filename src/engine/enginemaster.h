@@ -25,7 +25,7 @@
 #include "control/controlobject.h"
 #include "control/controlpushbutton.h"
 #include "engine/engineobject.h"
-#include "engine/enginechannel.h"
+#include "engine/channels/enginechannel.h"
 #include "engine/channelhandle.h"
 #include "soundio/soundmanager.h"
 #include "soundio/soundmanagerutil.h"
@@ -56,10 +56,10 @@ class EngineMaster : public QObject, public AudioSource {
     Q_OBJECT
   public:
     EngineMaster(UserSettingsPointer pConfig,
-                 const char* pGroup,
-                 EffectsManager* pEffectsManager,
-                 ChannelHandleFactory* pChannelHandleFactory,
-                 bool bEnableSidechain);
+            const QString& group,
+            EffectsManager* pEffectsManager,
+            ChannelHandleFactoryPointer pChannelHandleFactory,
+            bool bEnableSidechain);
     virtual ~EngineMaster();
 
     // Get access to the sample buffers. None of these are thread safe. Only to
@@ -164,8 +164,7 @@ class EngineMaster : public QObject, public AudioSource {
     class TalkoverGainCalculator : public GainCalculator {
       public:
         inline double getGain(ChannelInfo* pChannelInfo) const {
-            Q_UNUSED(pChannelInfo);
-            return 1.0;
+            return pChannelInfo->m_pVolumeControl->get();
         }
     };
     class OrientationVolumeGainCalculator : public GainCalculator {
@@ -271,9 +270,10 @@ class EngineMaster : public QObject, public AudioSource {
     // respective output.
     void processChannels(int iBufferSize);
 
-    ChannelHandleFactory* m_pChannelHandleFactory;
+    ChannelHandleFactoryPointer m_pChannelHandleFactory;
     void applyMasterEffects();
     void processHeadphones(const double masterMixGainInHeadphones);
+    bool sidechainMixRequired() const;
 
     EngineEffectsManager* m_pEngineEffectsManager;
 

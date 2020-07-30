@@ -6,6 +6,7 @@
 class Battery : public QObject {
     Q_OBJECT
   public:
+    static constexpr int TIME_UNKNOWN = -1;
     enum ChargingState {
         UNKNOWN,
         DISCHARGING,
@@ -13,7 +14,7 @@ class Battery : public QObject {
         CHARGED,
     };
     static Battery* getBattery(QObject* parent=nullptr);
-    virtual ~Battery();
+    ~Battery() override = default;
 
     // The number of minutes the battery has remaining to depletion (when
     // m_chargingState is DISCHARGING) or to being fully charged (when

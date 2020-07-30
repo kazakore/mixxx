@@ -21,7 +21,8 @@ bool shouldBlacklistDevice(const PmDeviceInfo* device) {
             deviceName.startsWith("Midi Through Port", Qt::CaseInsensitive);
 }
 
-PortMidiEnumerator::PortMidiEnumerator() : MidiEnumerator() {
+PortMidiEnumerator::PortMidiEnumerator()
+        : MidiEnumerator() {
     PmError err = Pm_Initialize();
     // Based on reading the source, it's not possible for this to fail.
     if (err != pmNoError) {
@@ -115,10 +116,23 @@ bool namesMatchPattern(const QString input_name,
     return false;
 }
 
+bool namesMatchAllowableEdgeCases(const QString input_name,
+                                  const QString output_name) {
+    // Mac OS 10.12 & Korg Kaoss DJ 1.6:
+    // Korg Kaoss DJ has input 'KAOSS DJ CONTROL' and output 'KAOSS DJ SOUND'.
+    // This means it doesn't pass the shouldLinkInputToOutput test. Without an
+    // output linked, the MIDI output for the device fails, as the device is
+    // NULL in PortMidiController
+    if (input_name == "KAOSS DJ CONTROL" && output_name == "KAOSS DJ SOUND") {
+        return true;
+    }
+    return false;
+}
+
 bool shouldLinkInputToOutput(const QString input_name,
                              const QString output_name) {
     // Early exit.
-    if (input_name == output_name) {
+    if (input_name == output_name || namesMatchAllowableEdgeCases(input_name, output_name)) {
         return true;
     }
 
@@ -216,7 +230,7 @@ QList<Controller*> PortMidiEnumerator::queryDevices() {
             inputDeviceInfo = deviceInfo;
             inputDevIndex = i;
 
-            //Reset our output device variables before we look for one incase we find none.
+            //Reset our output device variables before we look for one in case we find none.
             outputDeviceInfo = NULL;
             outputDevIndex = -1;
 
@@ -244,9 +258,11 @@ QList<Controller*> PortMidiEnumerator::queryDevices() {
             // device (outputDeviceInfo != NULL).
 
             //.... so create our (aggregate) MIDI device!
-            PortMidiController *currentDevice = new PortMidiController(
-                inputDeviceInfo, outputDeviceInfo,
-                inputDevIndex, outputDevIndex);
+            PortMidiController* currentDevice =
+                    new PortMidiController(inputDeviceInfo,
+                            outputDeviceInfo,
+                            inputDevIndex,
+                            outputDevIndex);
             m_devices.push_back(currentDevice);
         }
 

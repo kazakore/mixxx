@@ -2,6 +2,7 @@
 #define MIXER_SAMPLERBANK_H
 
 #include <QObject>
+#include "util/memory.h"
 
 class ControlObject;
 class ControlProxy;
@@ -14,7 +15,7 @@ class SamplerBank : public QObject {
     Q_OBJECT
   public:
     SamplerBank(PlayerManager* pPlayerManager);
-    virtual ~SamplerBank();
+    ~SamplerBank() override;
 
     bool saveSamplerBankToPath(const QString& samplerBankPath);
     bool loadSamplerBankFromPath(const QString& samplerBankPath);
@@ -25,8 +26,8 @@ class SamplerBank : public QObject {
 
   private:
     PlayerManager* m_pPlayerManager;
-    ControlObject* m_pCOLoadBank;
-    ControlObject* m_pCOSaveBank;
+    std::unique_ptr<ControlObject> m_pCOLoadBank;
+    std::unique_ptr<ControlObject> m_pCOSaveBank;
     ControlProxy* m_pCONumSamplers;
 };
 

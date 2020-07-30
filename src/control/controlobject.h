@@ -15,8 +15,7 @@
  *                                                                         *
  ***************************************************************************/
 
-#ifndef CONTROLOBJECT_H
-#define CONTROLOBJECT_H
+#pragma once
 
 #include <QObject>
 #include <QEvent>
@@ -42,14 +41,12 @@ class ControlObject : public QObject {
     virtual ~ControlObject();
 
     // Returns a pointer to the ControlObject matching the given ConfigKey
-    static ControlObject* getControl(const ConfigKey& key, bool warn = true);
-    static inline ControlObject* getControl(const QString& group, const QString& item, bool warn = true) {
+    static ControlObject* getControl(const ConfigKey& key, ControlFlags flags = ControlFlag::None);
+    static ControlObject* getControl(const QString& group,
+            const QString& item,
+            ControlFlags flags = ControlFlag::None) {
         ConfigKey key(group, item);
-        return getControl(key, warn);
-    }
-    static inline ControlObject* getControl(const char* group, const char* item, bool warn = true) {
-        ConfigKey key(group, item);
-        return getControl(key, warn);
+        return getControl(key, flags);
     }
 
     QString name() const {
@@ -151,15 +148,21 @@ class ControlObject : public QObject {
     // You need to use Qt::DirectConnection for the engine objects, since the
     // audio thread has no Qt event queue. But be a ware of race conditions in this case.
     // ref: http://qt-project.org/doc/qt-4.8/qt.html#ConnectionType-enum
-    bool connectValueChangeRequest(const QObject* receiver,
-                                   const char* method, Qt::ConnectionType type = Qt::AutoConnection);
+    template <typename Receiver, typename Slot>
+    bool connectValueChangeRequest(Receiver receiver, Slot func,
+                                   Qt::ConnectionType type = Qt::AutoConnection) {
+        bool ret = false;
+        if (m_pControl) {
+          ret = m_pControl->connectValueChangeRequest(receiver, func, type);
+        }
+        return ret;
+    }
 
     // Installs a value-change request handler that ignores all sets.
     void setReadOnly();
 
   signals:
     void valueChanged(double);
-    void valueChangedFromEngine(double);
 
   public:
     // DEPRECATED: Called to set the control value from the controller
@@ -177,11 +180,12 @@ class ControlObject : public QObject {
     void readOnlyHandler(double v);
 
   private:
-    void initialize(ConfigKey key, bool bIgnoreNops, bool bTrack,
-                    bool bPersist, double defaultValue);
+    ControlObject(ControlObject&&) = delete;
+    ControlObject(const ControlObject&) = delete;
+    ControlObject& operator=(ControlObject&&) = delete;
+    ControlObject& operator=(const ControlObject&) = delete;
+
     inline bool ignoreNops() const {
         return m_pControl ? m_pControl->ignoreNops() : true;
     }
 };
-
-#endif

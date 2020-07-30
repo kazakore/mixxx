@@ -1,16 +1,19 @@
+#include "library/dao/autodjcratesdao.h"
+
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 10, 0))
+#include <QRandomGenerator>
+#endif
 #include <QtDebug>
 #include <QtSql>
 
-#include "library/dao/autodjcratesdao.h"
-
-#include "mixer/playerinfo.h"
-#include "mixer/playermanager.h"
-#include "library/crate/crateschema.h"
 #include "library/dao/settingsdao.h"
 #include "library/dao/trackdao.h"
 #include "library/dao/trackschema.h"
 #include "library/queryutil.h"
 #include "library/trackcollection.h"
+#include "library/trackset/crate/crateschema.h"
+#include "mixer/playerinfo.h"
+#include "mixer/playermanager.h"
 
 #define AUTODJCRATESTABLE_TRACKID "track_id"
 #define AUTODJCRATESTABLE_CRATEREFS "craterefs"
@@ -34,8 +37,21 @@
 namespace {
 // Percentage of most and least played tracks to ignore [0,50)
 const int kLeastPreferredPercent = 15;
+
+// These consts are only used for DEBUG_ASSERTs
+#ifdef MIXXX_BUILD_DEBUG
 const int kLeastPreferredPercentMin = 0;
 const int kLeastPreferredPercentMax = 50;
+#endif
+
+int bounded_rand(int highest) {
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 10, 0))
+    return QRandomGenerator::global()->bounded(highest);
+#else
+    return qrand() % highest;
+#endif
+}
+
 } // anonymous namespace
 
 AutoDJCratesDAO::AutoDJCratesDAO(
@@ -194,41 +210,62 @@ void AutoDJCratesDAO::createAndConnectAutoDjCratesDatabase() {
 
     // Be notified when a track is modified.
     // We only care when the number of times it's been played changes.
-    connect(&m_pTrackCollection->getTrackDAO(), SIGNAL(trackDirty(TrackId)),
-            this, SLOT(slotTrackDirty(TrackId)));
+    connect(m_pTrackCollection,
+            &TrackCollection::trackDirty,
+            this,
+            &AutoDJCratesDAO::slotTrackDirty);
 
     // Be notified when the status of crates changes.
-    connect(m_pTrackCollection, SIGNAL(crateInserted(CrateId)),
-            this, SLOT(slotCrateInserted(CrateId)));
-    connect(m_pTrackCollection, SIGNAL(crateDeleted(CrateId)),
-            this, SLOT(slotCrateDeleted(CrateId)));
-    connect(m_pTrackCollection, SIGNAL(crateUpdated(CrateId)),
-            this, SLOT(slotCrateUpdated(CrateId)));
-    connect(m_pTrackCollection, SIGNAL(crateTracksChanged(CrateId,QList<TrackId>,QList<TrackId>)),
-            this, SLOT(slotCrateTracksChanged(CrateId,QList<TrackId>,QList<TrackId>)));
+    connect(m_pTrackCollection,
+            &TrackCollection::crateInserted,
+            this,
+            &AutoDJCratesDAO::slotCrateInserted);
+    connect(m_pTrackCollection,
+            &TrackCollection::crateDeleted,
+            this,
+            &AutoDJCratesDAO::slotCrateDeleted);
+    connect(m_pTrackCollection,
+            &TrackCollection::crateUpdated,
+            this,
+            &AutoDJCratesDAO::slotCrateUpdated);
+    connect(m_pTrackCollection,
+            &TrackCollection::crateTracksChanged,
+            this,
+            &AutoDJCratesDAO::slotCrateTracksChanged);
 
     // Be notified when playlists are added/removed.
     // We only care about set-log playlists.
-    connect(&m_pTrackCollection->getPlaylistDAO(), SIGNAL(added(int)),
-            this, SLOT(slotPlaylistAdded(int)));
-    connect(&m_pTrackCollection->getPlaylistDAO(), SIGNAL(deleted(int)),
-            this, SLOT(slotPlaylistDeleted(int)));
+    connect(&m_pTrackCollection->getPlaylistDAO(),
+            &PlaylistDAO::added,
+            this,
+            &AutoDJCratesDAO::slotPlaylistAdded);
+    connect(&m_pTrackCollection->getPlaylistDAO(),
+            &PlaylistDAO::deleted,
+            this,
+            &AutoDJCratesDAO::slotPlaylistDeleted);
 
     // Be notified when tracks are added/removed from playlists.
     // We only care about the auto-DJ playlist and the set-log playlists.
-    connect(&m_pTrackCollection->getPlaylistDAO(), SIGNAL(trackAdded(int,TrackId,int)),
-            this, SLOT(slotPlaylistTrackAdded(int,TrackId,int)));
-    connect(&m_pTrackCollection->getPlaylistDAO(), SIGNAL(trackRemoved(int,TrackId,int)),
-            this, SLOT(slotPlaylistTrackRemoved(int,TrackId,int)));
+    connect(&m_pTrackCollection->getPlaylistDAO(),
+            &PlaylistDAO::trackAdded,
+            this,
+            &AutoDJCratesDAO::slotPlaylistTrackAdded);
+    connect(&m_pTrackCollection->getPlaylistDAO(),
+            &PlaylistDAO::trackRemoved,
+            this,
+            &AutoDJCratesDAO::slotPlaylistTrackRemoved);
 
     // Be notified when tracks are loaded to, or unloaded from, a deck.
     // These count as auto-DJ references, i.e. prevent the track from being
     // selected randomly.
-    connect(&PlayerInfo::instance(), SIGNAL(trackLoaded(QString,TrackPointer)),
-            this, SLOT(slotPlayerInfoTrackLoaded(QString,TrackPointer)));
     connect(&PlayerInfo::instance(),
-            SIGNAL(trackUnloaded(QString,TrackPointer)),
-            this, SLOT(slotPlayerInfoTrackUnloaded(QString,TrackPointer)));
+            &PlayerInfo::trackLoaded,
+            this,
+            &AutoDJCratesDAO::slotPlayerInfoTrackLoaded);
+    connect(&PlayerInfo::instance(),
+            &PlayerInfo::trackUnloaded,
+            this,
+            &AutoDJCratesDAO::slotPlayerInfoTrackUnloaded);
 
     // Remember that the auto-DJ-crates database has been created.
     m_bAutoDjCratesDbCreated = true;
@@ -689,8 +726,8 @@ TrackId AutoDJCratesDAO::getRandomTrackIdFromAutoDj(int percentActive) {
 // Signaled by the track DAO when a track's information is updated.
 void AutoDJCratesDAO::slotTrackDirty(TrackId trackId) {
     // Update our record of the number of times played, if that changed.
-    TrackPointer pTrack = m_pTrackCollection->getTrackDAO().getTrack(trackId);
-    if (pTrack == NULL) {
+    TrackPointer pTrack = m_pTrackCollection->getTrackById(trackId);
+    if (!pTrack) {
         return;
     }
     const PlayCounter playCounter(pTrack->getPlayCounter());
@@ -1092,7 +1129,7 @@ void AutoDJCratesDAO::slotPlayerInfoTrackUnloaded(QString group,
 // We are selecting the track in the following manner:
 // We divide the library tracks into three sections, for which
 // we sort the library according to times_played and select a
-// percentage_of_prefered_tracks (70% by default ignoring the least-played
+// percentage_of_preferred_tracks (70% by default ignoring the least-played
 // 15% and most played 15%). We select a random track from this 70%
 // or a random track from the remaining 30%.
 //
@@ -1147,25 +1184,25 @@ TrackId AutoDJCratesDAO::getRandomTrackIdFromLibrary(int iPlaylistId) {
         // Least Preferred is not disabled
         iIgnoreIndex1 = (kLeastPreferredPercent * iTotalTracks) / 100;
         iIgnoreIndex2 = iTotalTracks - iIgnoreIndex1;
-        int iRandomNo = qrand() % 16 ;
+        int iRandomNo = bounded_rand(16);
         if(iRandomNo == 0 && iIgnoreIndex1 != 0) {
             // Select a track from the first [1, iIgnoredIndex1]
             beginIndex = 0;
-            offset = qrand() % iIgnoreIndex1 + 1 ;
+            offset = bounded_rand(iIgnoreIndex1) + 1;
         } else if(iRandomNo == 1 && iTotalTracks > iIgnoreIndex2){
             // Select from [iIgnoredIndex2 + 1, iTotalTracks];
             beginIndex = iIgnoreIndex2;
             // We need a number between [1, Total - iIgnoreIndex2]
-            offset = qrand() % (iTotalTracks - iIgnoreIndex2) + 1;
+            offset = bounded_rand(iTotalTracks - iIgnoreIndex2) + 1;
         } else {
             // Select from [iIgnoreIndex1 + 1, iIgnoreIndex2];
             beginIndex = iIgnoreIndex1;
             // We need a number between [1, iIgnoreIndex2 - iIgnoreIndex1]
-            offset = qrand() % (iIgnoreIndex2 - iIgnoreIndex1) + 1;
+            offset = bounded_rand(iIgnoreIndex2 - iIgnoreIndex1) + 1;
         }
         offset = beginIndex + offset;
-        // Incase we end up doing a qRand()%1 above
-        if( offset >= iTotalTracks) {
+        // In case we end up doing a qRand()%1 above
+        if (offset >= iTotalTracks) {
             offset= 0 ;
         }
     }

@@ -1,5 +1,6 @@
 #include "dialog/dlgabout.h"
 #include "util/version.h"
+#include <QFile>
 
 DlgAbout::DlgAbout(QWidget* parent) : QDialog(parent), Ui::DlgAboutDlg() {
     setupUi(this);
@@ -24,6 +25,13 @@ DlgAbout::DlgAbout(QWidget* parent) : QDialog(parent), Ui::DlgAboutDlg() {
     }
     version_label->setText(version.join(" "));
 
+    QFile licenseFile(":/LICENSE");
+    if (!licenseFile.open(QIODevice::ReadOnly)) {
+        qWarning() << "LICENSE file not found";
+    } else {
+        licenseText->setPlainText(licenseFile.readAll());
+    }
+
     QString s_devTeam = tr("Mixxx %1 Development Team").arg(mixxxVersion);
     QString s_contributions = tr("With contributions from:");
     QString s_specialThanks = tr("And special thanks to:");
@@ -32,104 +40,61 @@ DlgAbout::DlgAbout(QWidget* parent) : QDialog(parent), Ui::DlgAboutDlg() {
 
     QStringList thisReleaseDevelopers;
     thisReleaseDevelopers
-            << "RJ Ryan"
+            << "RJ Skerry-Ryan"
             << "Owen Williams"
             << "Sean Pappalardo"
             << "Daniel Sch&uuml;rmann"
             << "S. Brandt"
-            << "Ilkka Tuohela"
-            << "Max Linke"
-            << "Marcos Cardinot"
-            << "Nicu Badescu"
             << "Uwe Klotz"
             << "Be"
-            << "S&eacute;bastien Blaisot";
+            << "S&eacute;bastien Blaisot"
+            << "ronso0"
+            << "Jan Holthuis";
 
-    QStringList thisReleaseContributors;
-    thisReleaseContributors
-            << "Alex Barker"
-            << "Matthew Mikolay"
-            << "Thanasis Liappis"
-            << "Daniel Lindenfelser"
-            << "Andrey Smelov"
-            << "Alban Bedel"
-            << "Stefan N&uuml;rnberger"
-            << "Steven Boswell"
-            << "Jo&atilde;o Reys Santos"
-            << "Carl Pillot"
-            << "Vedant Agarwala"
-            << "Nazar Gerasymchuk"
-            << "Federico Briata"
-            << "Leo Combes"
-            << "Florian Kiekh&auml;fer"
-            << "Michael Sawyer"
+    // This list should contains all contributors committed
+    // code to the Mixxx core within the past two years.
+    // New Contributors are added at the end.
+    QStringList recentContributors;
+    recentContributors
             << "Tuukka Pasanen"
-            << "Quentin Faidide"
-            << "Peter G. Marczis"
-            << "Khyrul Bashar"
-            << "Johannes Obermayr"
-            << "Kevin Lee"
-            << "Evan Radkoff"
-            << "Lee Matos"
-            << "Jean Claveau"
             << "Nino MP"
-            << "Ryan Kramer"
-            << "Zak Reynolds"
-            << "Dennis Rohner"
-            << "Juha Pitk&auml;nen"
-            << "Kevin Wern"
-            << "Varun Jewalikar"
-            << "Dennis Wallace"
-            << "Keith Salisbury"
-            << "Irina Grosu"
-            << "Callum Styan"
-            << "Rahul Behl"
-            << "Markus Baertschi"
             << "Nico Schl&ouml;mer"
-            << "Don Dennis"
-            << "Alexandru Jercaianu"
-            << "Nils Goroll"
-            << "Marco Angerer"
             << "Ferran Pujol Camins"
-            << "Markus Kl&ouml;sges"
-            << "Vladim&iacute;r Dudr"
-            << "Thorsten Munsch"
-            << "Emile Vrijdags"
-            << "Neale Pickett"
-            << "St&eacute;phane Guillou"
-            << "Russ Mannex"
-            << "Brendan Austin"
-            << "Lorenz Drescher"
-            << "David Guglielmi"
-            << "James Atwill"
-            << "Chlo&eacute; Avrillon"
-            << "Hendrik Reglin"
-            << "Pavel Potocek"
             << "Joan Marc&egrave; i Igual"
-            << "Serge Ukolov"
-            << "Patric Schmitz"
-            << "Timothy Rae"
-            << "Roland Schwarz"
-            << "Jan Ypma"
-            << "Leigh Scott"
-            << "William Lemus"
-            << "Andreas M&uuml;ller"
             << "Josep Maria Antol&iacute;n Segura"
-            << "Sam Cross"
-            << "Joey Pabalinas"
-            << "Nimit Bhardwaj"
-            << "Pavel Sokolov"
-            << "Devananda van der Veen"
-            << "Tatsuyuki Ishi"
-            << "Kilian Feess"
-			<< "Conner Phillips"
-			<< "Daniel Poelzleithner"
-            << "Artyom Lyan"
-            << "Johan Lasperas"
-            << "Olaf Hering"
+            << "Daniel Poelzleithner"
+            << "St&eacute;phane Lepin"
             << "Stefan Weber"
-            << "Eduardo Acero"
-			<< "Kshitij Gupta";
+            << "Kshitij Gupta"
+            << "Matthew Nicholson"
+            << "Jamie Gifford"
+            << "luzpaz"
+            << "Sebastian Reu&szlig;e"
+            << "Pawe&#322; Goli&#324;ski"
+            << "beenisss"
+            << "Bernd Binder"
+            << "Pradyuman"
+            << "Nikolaus Einhauser"
+            << "Nik Martin"
+            << "Kerrick Staley"
+            << "Raphael Graf"
+            << "Nik Martin"
+            << "YunQiang Su"
+            << "Sebastian Hasler"
+            << "Philip Gottschling"
+            << "Melissa"
+            << "Ned Haughton"
+            << "Adam Szmigin"
+            << "Cristiano Lacerda"
+            << "Sergey Ukolov"
+            << "Ketan Lambat"
+            << "Evan Dekker"
+            << "Edward Kigwana"
+            << "Simon Harst"
+            << "Harshit Maurya"
+            << "Janek Fischer"
+            << "Chris Hills"
+            << "David Lowenfels";
 
     QStringList specialThanks;
     specialThanks
@@ -174,7 +139,11 @@ DlgAbout::DlgAbout(QWidget* parent) : QDialog(parent), Ui::DlgAboutDlg() {
             << "Tobias Rafreider"
             << "Bill Good"
             << "Vittorio Colao"
-            << "Thomas Vincent";
+            << "Thomas Vincent"
+            << "Ilkka Tuohela"
+            << "Max Linke"
+            << "Marcos Cardinot"
+            << "Nicu Badescu";
 
     QStringList pastContributors;
     pastContributors
@@ -258,11 +227,85 @@ DlgAbout::DlgAbout(QWidget* parent) : QDialog(parent), Ui::DlgAboutDlg() {
             << "Florian Mahlknecht"
             << "Ben Clark"
             << "Tom Gascoigne"
-            << "Neale Pickett"
             << "Aaron Mavrinac"
             << "Markus H&auml;rer"
             << "Scott Stewart"
-            << "Nimatek";
+            << "Nimatek"
+            << "Matthew Mikolay"
+            << "Thanasis Liappis"
+            << "Daniel Lindenfelser"
+            << "Andrey Smelov"
+            << "Alban Bedel"
+            << "Steven Boswell"
+            << "Jo&atilde;o Reys Santos"
+            << "Carl Pillot"
+            << "Vedant Agarwala"
+            << "Nazar Gerasymchuk"
+            << "Federico Briata"
+            << "Leo Combes"
+            << "Florian Kiekh&auml;fer"
+            << "Michael Sawyer"
+            << "Quentin Faidide"
+            << "Peter G. Marczis"
+            << "Khyrul Bashar"
+            << "Johannes Obermayr"
+            << "Kevin Lee"
+            << "Evan Radkoff"
+            << "Lee Matos"
+            << "Ryan Kramer"
+            << "Zak Reynolds"
+            << "Dennis Rohner"
+            << "Juha Pitk&auml;nen"
+            << "Varun Jewalikar"
+            << "Dennis Wallace"
+            << "Keith Salisbury"
+            << "Irina Grosu"
+            << "Callum Styan"
+            << "Rahul Behl"
+            << "Markus Baertschi"
+            << "Don Dennis"
+            << "Alexandru Jercaianu"
+            << "Nils Goroll"
+            << "Marco Angerer"
+            << "Thorsten Munsch"
+            << "Emile Vrijdags"
+            << "St&eacute;phane Guillou"
+            << "Russ Mannex"
+            << "Brendan Austin"
+            << "Lorenz Drescher"
+            << "David Guglielmi"
+            << "James Atwill"
+            << "Alex Barker"
+            << "Jean Claveau"
+            << "Kevin Wern"
+            << "Vladim&iacute;r Dudr"
+            << "Neale Pickett"
+            << "Chlo&eacute; Avrillon"
+            << "Hendrik Reglin"
+            << "Serge Ukolov"
+            << "Patric Schmitz"
+            << "Roland Schwarz"
+            << "Jan Ypma"
+            << "Andreas M&uuml;ller"
+            << "Sam Cross"
+            << "Joey Pabalinas"
+            << "Stefan N&uuml;rnberger"
+            << "Markus Kl&ouml;sges"
+            << "Pavel Potocek"
+            << "Timothy Rae"
+            << "Leigh Scott"
+            << "William Lemus"
+            << "Nimit Bhardwaj"
+            << "Pavel Sokolov"
+            << "Devananda van der Veen"
+            << "Tatsuyuki Ishi"
+            << "Kilian Feess"
+            << "Conner Phillips"
+            << "Artyom Lyan"
+            << "Johan Lasperas"
+            << "Olaf Hering"
+            << "Eduardo Acero"
+            << "Thomas Jarosch";
 
     QString sectionTemplate = QString(
         "<p align=\"center\"><b>%1</b></p><p align=\"center\">%2</p>");
@@ -270,7 +313,7 @@ DlgAbout::DlgAbout(QWidget* parent) : QDialog(parent), Ui::DlgAboutDlg() {
     sections << sectionTemplate.arg(s_devTeam,
                                     thisReleaseDevelopers.join("<br>"))
              << sectionTemplate.arg(s_contributions,
-                                    thisReleaseContributors.join("<br>"))
+                                    recentContributors.join("<br>"))
              << sectionTemplate.arg(s_pastDevs,
                                     pastDevelopers.join("<br>"))
              << sectionTemplate.arg(s_pastContribs,

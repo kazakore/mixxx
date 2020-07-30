@@ -6,11 +6,12 @@
 #include <QMouseEvent>
 #include <QWheelEvent>
 
+#include "skin/skincontext.h"
+#include "util/widgetrendertimer.h"
 #include "widget/wwidget.h"
 #include "widget/knobeventhandler.h"
 #include "widget/wpixmapstore.h"
 #include "widget/wimagestore.h"
-#include "skin/skincontext.h"
 
 // This is used for knobs, if the knob value can be displayed
 // by rotating a single SVG image.
@@ -34,6 +35,7 @@ class WKnobComposed : public WWidget {
     void paintEvent(QPaintEvent* /*unused*/) override;
 
   private:
+    void inputActivity();
     void clear();
     void setPixmapBackground(
             PixmapSource source,
@@ -43,6 +45,7 @@ class WKnobComposed : public WWidget {
             PixmapSource source,
             Paintable::DrawMode mode,
             double scaleFactor);
+    void drawArc(QPainter* pPainter);
 
     double m_dCurrentAngle;
     PaintablePointer m_pKnob;
@@ -52,6 +55,16 @@ class WKnobComposed : public WWidget {
     double m_dMaxAngle;
     double m_dKnobCenterXOffset;
     double m_dKnobCenterYOffset;
+    double m_dArcRadius;
+    double m_dArcThickness;
+    double m_dArcBgThickness;
+    QColor m_arcColor;
+    QColor m_arcBgColor;
+    bool m_arcUnipolar;
+    bool m_arcReversed;
+    Qt::PenCapStyle m_arcPenCap;
+    WidgetRenderTimer m_renderTimer;
+
     friend class KnobEventHandler<WKnobComposed>;
 };
 

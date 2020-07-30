@@ -3,9 +3,11 @@
 
 #include <QMouseEvent>
 #include <QWheelEvent>
+#include <QColor>
 #include <QCursor>
 #include <QApplication>
 #include <QPoint>
+#include <QPixmap>
 
 #include "util/math.h"
 
@@ -14,6 +16,9 @@ class KnobEventHandler {
   public:
     KnobEventHandler()
             : m_bRightButtonPressed(false) {
+            QPixmap blankPixmap(32, 32);
+            blankPixmap.fill(QColor(0, 0, 0, 0));
+            m_blankCursor = QCursor(blankPixmap);
     }
 
     double valueFromMouseEvent(T* pWidget, QMouseEvent* e) {
@@ -43,7 +48,7 @@ class KnobEventHandler {
             QCursor::setPos(m_startPos);
             double value = valueFromMouseEvent(pWidget, e);
             pWidget->setControlParameterDown(value);
-            pWidget->update();
+            pWidget->inputActivity();
         }
     }
 
@@ -56,7 +61,9 @@ class KnobEventHandler {
             case Qt::LeftButton:
             case Qt::MidButton:
                 m_startPos = e->globalPos();
-                QApplication::setOverrideCursor(Qt::BlankCursor);
+                // Somehow using Qt::BlankCursor does not work on Windows
+                // https://mixxx.org/forums/viewtopic.php?p=40298#p40298
+                QApplication::setOverrideCursor(m_blankCursor);
                 break;
             default:
                 break;
@@ -72,7 +79,7 @@ class KnobEventHandler {
                 QApplication::restoreOverrideCursor();
                 value = valueFromMouseEvent(pWidget, e);
                 pWidget->setControlParameterUp(value);
-                pWidget->update();
+                pWidget->inputActivity();
                 break;
             case Qt::RightButton:
                 m_bRightButtonPressed = false;
@@ -80,19 +87,18 @@ class KnobEventHandler {
             default:
                 break;
         }
-        pWidget->update();
     }
 
     void wheelEvent(T* pWidget, QWheelEvent* e) {
         // For legacy (MIDI) reasons this is tuned to 127.
-        double wheelDirection = e->delta() / (120.0 * 127.0);
+        double wheelDirection = e->angleDelta().y() / (120.0 * 127.0);
         double newValue = pWidget->getControlParameter() + wheelDirection;
 
         // Clamp to [0.0, 1.0]
         newValue = math_clamp(newValue, 0.0, 1.0);
 
         pWidget->setControlParameter(newValue);
-        pWidget->update();
+        pWidget->inputActivity();
         e->accept();
     }
 
@@ -102,6 +108,7 @@ class KnobEventHandler {
 
     // Starting point when left mouse button is pressed
     QPoint m_startPos;
+    QCursor m_blankCursor;
 };
 
 #endif /* KNOBEVENTHANDLER_H */

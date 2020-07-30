@@ -24,13 +24,65 @@ private:
     friend class GlobalTrackCache;
     // Try to determine and return the relocated file info
     // or otherwise return just the provided file info.
-    virtual QFileInfo relocateCachedTrack(
+    virtual TrackFile relocateCachedTrack(
             TrackId trackId,
-            QFileInfo fileInfo) = 0;
+            TrackFile fileInfo) = 0;
 
 protected:
-    virtual ~GlobalTrackCacheRelocator() {}
+  virtual ~GlobalTrackCacheRelocator() = default;
 };
+
+typedef void (*deleteTrackFn_t)(Track*);
+
+class GlobalTrackCacheEntry final {
+    // We need to hold two shared pointers, the deletingPtr is
+    // responsible for the lifetime of the Track object itself.
+    // The second one counts the references outside Mixxx, if it
+    // is not longer referenced, the track is saved and evicted
+    // from the cache.
+  public:
+    class TrackDeleter {
+    public:
+        explicit TrackDeleter(deleteTrackFn_t deleteTrackFn = nullptr)
+                : m_deleteTrackFn(deleteTrackFn) {
+        }
+
+        void operator()(Track* pTrack) const;
+
+    private:
+        deleteTrackFn_t m_deleteTrackFn;
+    };
+
+    explicit GlobalTrackCacheEntry(
+            std::unique_ptr<Track, TrackDeleter> deletingPtr)
+        : m_deletingPtr(std::move(deletingPtr)) {
+    }
+    GlobalTrackCacheEntry(const GlobalTrackCacheEntry& other) = delete;
+    GlobalTrackCacheEntry(GlobalTrackCacheEntry&&) = default;
+
+    void init(TrackWeakPointer savingWeakPtr) {
+        // Uninitialized or expired
+        DEBUG_ASSERT(!m_savingWeakPtr.lock());
+        m_savingWeakPtr = std::move(savingWeakPtr);
+    }
+
+    Track* getPlainPtr() const {
+        return m_deletingPtr.get();
+    }
+
+    TrackPointer lock() const {
+        return m_savingWeakPtr.lock();
+    }
+    bool expired() const {
+        return m_savingWeakPtr.expired();
+    }
+
+  private:
+    std::unique_ptr<Track, TrackDeleter> m_deletingPtr;
+    TrackWeakPointer m_savingWeakPtr;
+};
+
+typedef std::shared_ptr<GlobalTrackCacheEntry> GlobalTrackCacheEntryPointer;
 
 class GlobalTrackCacheLocker {
 public:
@@ -47,6 +99,8 @@ public:
     void relocateCachedTracks(
             GlobalTrackCacheRelocator* /*nullable*/ pRelocator) const;
 
+    void purgeTrackId(const TrackId& trackId);
+
     // Enforces the eviction of all cached tracks including invocation
     // of the callback and disables the cache permanently.
     void deactivateCache() const;
@@ -58,8 +112,9 @@ public:
             const TrackId& trackId) const;
     TrackPointer lookupTrackByRef(
             const TrackRef& trackRef) const;
+    QSet<TrackId> getCachedTrackIds() const;
 
-private:
+  private:
     friend class GlobalTrackCache;
 
     void lockCache();
@@ -77,24 +132,14 @@ protected:
 class GlobalTrackCacheResolver final: public GlobalTrackCacheLocker {
 public:
     GlobalTrackCacheResolver(
-                QFileInfo fileInfo,
+                TrackFile fileInfo,
                 SecurityTokenPointer pSecurityToken = SecurityTokenPointer());
     GlobalTrackCacheResolver(
-                QFileInfo fileInfo,
+                TrackFile fileInfo,
                 TrackId trackId,
                 SecurityTokenPointer pSecurityToken = SecurityTokenPointer());
     GlobalTrackCacheResolver(const GlobalTrackCacheResolver&) = delete;
-#if !defined(_MSC_VER) && (_MSC_VER > 1900)
     GlobalTrackCacheResolver(GlobalTrackCacheResolver&&) = default;
-#else
-    // Visual Studio 2015 does not support default generated move constructors
-    GlobalTrackCacheResolver(GlobalTrackCacheResolver&& moveable)
-        : GlobalTrackCacheLocker(std::move(moveable)),
-          m_lookupResult(std::move(moveable.m_lookupResult)),
-          m_strongPtr(std::move(moveable.m_strongPtr)),
-          m_trackRef(std::move(moveable.m_trackRef)) {
-    }
-#endif
 
     GlobalTrackCacheLookupResult getLookupResult() const {
         return m_lookupResult;
@@ -129,19 +174,44 @@ private:
     TrackRef m_trackRef;
 };
 
+/// Callback interface for pre-delete actions
 class /*interface*/ GlobalTrackCacheSaver {
 private:
     friend class GlobalTrackCache;
-    virtual void saveCachedTrack(
-            TrackPointer pTrack) noexcept = 0;
 
-protected:
-    virtual ~GlobalTrackCacheSaver() {}
+    /// Perform actions that are necessary to save any pending
+    /// modifications of a Track object before it finally gets
+    /// deleted.
+    ///
+    /// GlobalTrackCache ensures that the given pointer is valid
+    /// and the last and only reference to this Track object.
+    /// While invoked the GlobalTrackCache is locked to ensure
+    /// that this particular track is not accessible while
+    /// saving the Track object, e.g. by updating the database
+    /// and exporting file tags.
+    ///
+    /// This callback method will always be invoked from the
+    /// event loop thread of the owning GlobalTrackCache instance.
+    /// Typically the GlobalTrackCache lives on the main thread
+    /// that also controls access to the database.
+    /// NOTE(2020-06-06): If these assumptions about thread affinity
+    /// are no longer valid the design decisions need to be revisited
+    /// carefully!
+    virtual void saveEvictedTrack(
+            Track* pEvictedTrack) noexcept = 0;
+
+  protected:
+    virtual ~GlobalTrackCacheSaver() = default;
 };
 
-class GlobalTrackCache {
-public:
-    static void createInstance(GlobalTrackCacheSaver* pDeleter);
+class GlobalTrackCache : public QObject {
+    Q_OBJECT
+
+  public:
+    static void createInstance(
+            GlobalTrackCacheSaver* pSaver,
+            // A custom deleter is only needed for tests without an event loop!
+            deleteTrackFn_t deleteTrackFn = nullptr);
     // NOTE(uklotzde, 2018-02-20): We decided not to destroy the singular
     // instance during shutdown, because we are not able to guarantee that
     // all track references have been released before. Instead the singular
@@ -150,19 +220,20 @@ public:
     // See also: GlobalTrackCacheLocker::deactivateCache()
     static void destroyInstance();
 
-private:
+    // Deleter callbacks for the smart-pointer
+    static void evictAndSaveCachedTrack(GlobalTrackCacheEntryPointer cacheEntryPtr);
+
+  private slots:
+    void slotEvictAndSave(GlobalTrackCacheEntryPointer cacheEntryPtr);
+
+  private:
     friend class GlobalTrackCacheLocker;
     friend class GlobalTrackCacheResolver;
 
-    // Callback for the smart-pointer
-    static void deleter(Track* plainPtr);
-
-    explicit GlobalTrackCache(GlobalTrackCacheSaver* pDeleter);
-    ~GlobalTrackCache();
-
-    // This function should only be called DEBUG_ASSERT statements
-    // to verify the class invariants during development.
-    bool verifyConsistency() const;
+    GlobalTrackCache(
+            GlobalTrackCacheSaver* pSaver,
+            deleteTrackFn_t deleteTrackFn);
+    ~GlobalTrackCache() override;
 
     void relocateTracks(
             GlobalTrackCacheRelocator* /*nullable*/ pRelocator);
@@ -171,13 +242,13 @@ private:
             const TrackId& trackId);
     TrackPointer lookupByRef(
             const TrackRef& trackRef);
+    QSet<TrackId> getCachedTrackIds() const;
 
-    TrackPointer revive(
-            Track* plainPtr);
+    TrackPointer revive(GlobalTrackCacheEntryPointer entryPtr);
 
     void resolve(
             GlobalTrackCacheResolver* /*in/out*/ pCacheResolver,
-            QFileInfo /*in*/ fileInfo,
+            TrackFile /*in*/ fileInfo,
             TrackId /*in*/ trackId,
             SecurityTokenPointer /*in*/ pSecurityToken);
 
@@ -186,36 +257,29 @@ private:
             TrackRef trackRef,
             TrackId trackId);
 
-    void evictOrDelete(Track* plainPtr);
+    void purgeTrackId(TrackId trackId);
 
-    typedef std::unordered_map<Track*, TrackWeakPointer> AllocatedTracks;
-
-    bool evictAndSave(TrackPointer strongPtr);
-
-    void evict(TrackPointer strongPtr);
+    bool tryEvict(Track* plainPtr);
+    bool isCached(Track* plainPtr) const;
 
     bool isEmpty() const;
 
     void deactivate();
+
+    void saveEvictedTrack(Track* pEvictedTrack) const;
 
     // Managed by GlobalTrackCacheLocker
     mutable QMutex m_mutex;
 
     GlobalTrackCacheSaver* m_pSaver;
 
-    // This is the owner of the Track objects.
-    // The tracks are saved back to database and file metatdata if the first
-    // shared_ptr expires. This time the Track is still cached.
-    // Than the track is copied into a second shared_ptr used while saving the
-    // track. If this also expires, the track is finally deleted and removed
-    // from the index.
-    AllocatedTracks m_allocatedTracks;
+    deleteTrackFn_t m_deleteTrackFn;
 
     // This caches the unsaved Tracks by ID
-    typedef std::unordered_map<TrackId, Track*, TrackId::hash_fun_t> TracksById;
+    typedef std::unordered_map<TrackId, GlobalTrackCacheEntryPointer, TrackId::hash_fun_t> TracksById;
     TracksById m_tracksById;
 
     // This caches the unsaved Tracks by location
-    typedef std::map<QString, Track*> TracksByCanonicalLocation;
+    typedef std::map<QString, GlobalTrackCacheEntryPointer> TracksByCanonicalLocation;
     TracksByCanonicalLocation m_tracksByCanonicalLocation;
 };

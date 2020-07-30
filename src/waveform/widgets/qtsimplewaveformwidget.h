@@ -8,7 +8,7 @@
 class QtSimpleWaveformWidget : public QGLWidget, public WaveformWidgetAbstract {
     Q_OBJECT
   public:
-    QtSimpleWaveformWidget(const char* group, QWidget* parent);
+    QtSimpleWaveformWidget(const QString& group, QWidget* parent);
     virtual ~QtSimpleWaveformWidget();
 
 
@@ -16,6 +16,7 @@ class QtSimpleWaveformWidget : public QGLWidget, public WaveformWidgetAbstract {
 
     static inline QString getWaveformWidgetName() { return tr("Simple") + " - Qt"; }
     static inline bool useOpenGl() { return true; }
+    static inline bool useOpenGles() { return true; }
     static inline bool useOpenGLShaders() { return false; }
     static inline bool developerOnly() { return false; }
 

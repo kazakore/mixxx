@@ -81,7 +81,7 @@ struct MidiOptions {
             bool rot64_fast    : 1;
             bool diff          : 1;
             bool button        : 1;    // Button Down (!=00) and Button Up (00) events happen together
-            bool sw            : 1;    // button down (!=00) and button up (00) events happen seperately
+            bool sw            : 1;    // button down (!=00) and button up (00) events happen separately
             bool spread64      : 1;    // accelerated difference from 64
             bool herc_jog      : 1;    // generic Hercules range correction 0x01 -> +1; 0x7f -> -1
             bool selectknob    : 1;    // relative knob which can be turned forever and outputs a signed value
@@ -160,11 +160,19 @@ struct MidiInputMapping {
               control(control) {
     }
 
-    // Don't use descriptions in operator== since we only use equality testing
-    // for unit tests.
+    MidiInputMapping(MidiKey key,
+            MidiOptions options,
+            const ConfigKey& control,
+            QString description)
+            : key(key),
+              options(options),
+              control(control),
+              description(description) {
+    }
+
     bool operator==(const MidiInputMapping& other) const {
         return key == other.key && options == other.options &&
-                control == other.control;
+                control == other.control && description == other.description;
     }
 
     MidiKey key;

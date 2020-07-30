@@ -5,9 +5,9 @@
 //=====================================================
 // Author: josepma@gmail.com
 //
-// Version 2015-12-12: 
+// Version 2015-12-12:
 //        Initial version. 4 decks, jog wheel and scratch, autodj, navigation and effects.
-// Version 2015-12-19: 
+// Version 2015-12-19:
 //        Improvements from https://github.com/mixxxdj/mixxx/pull/810
 //        Beat flashing can be configurd on pitch reset led, jog led, sync button or disabled completely.
 //        Option to switch automatically to scratch crossfader curve on scratch mode.
@@ -18,13 +18,13 @@
 //        Automatically setup some internal values, like 4 decks mode
 //        Support speed sensor on jog wheel and Fx knob. They need to be moved really fast, so it's rarely useful.
 // Version 2016-09-26
-//        Beatgrid editing mode enabled with shift+sync. Allows to correct the beatgrid from the controller. 
+//        Beatgrid editing mode enabled with shift+sync. Allows to correct the beatgrid from the controller.
 //          (For when you're in the middle of a mix and something is not properly aligned)
 //        Brake effect (power unplug) with shift+stop, backward playing moved to shift+play and forward and rewind by beats.
 //        Keylock, quantize and master sync (shift pitch scale up, shift pitch scale down and sync pressed for 400ms respectively).
 //        Improvements and fixes on sync button and navigation.
 //        Corrections in soft takeover, and initialization of control values from their physical positions on Mixxx startup.
-//        Audio vu meters on the kill/source buttons that switches between master and decks on pfl. Can be switched 
+//        Audio vu meters on the kill/source buttons that switches between master and decks on pfl. Can be switched
 //          off on userSettings. If kill or source buttons are activated, the vu on that channel is deactivated.
 //        Reimplemented the actions for Fx buttons. It now allows to have personalized mappings, and comes already with three:
 //          Manual/VirtualDJ setup, Mixxx 2.0 setup and a new setup that adds more functionality, like playing 4 samplers.
@@ -43,15 +43,17 @@
 //        Round of fixes on several controls related to preview deck and effects.
 //        Added permanent rate change action to pitch buttons when used with shift. (For those cases where
 //          the defined range of the slider is not enough)
+// Version 2017-12-16
+//        Some changes for Mixxx 2.1
+//        Single JogWheel mode hack (One of my jog wheels got broken.. this is a workaround).
 // Usage:
 // ------
-// Check the dedicated controller wiki page at: 
+// Check the dedicated controller wiki page at:
 //    http://mixxx.org/wiki/doku.php/hercules_dj_console_4-mx
 //
 // Variables on Hercules4Mx.userSettings can be modified by users to suit their preferences.
 /////////////////////////////////////////////////////////////////////
 var Hercules4Mx = function() {};
-
 
 // The 4 possible values for the beatFlashLed option below.
 Hercules4Mx.Leds = {
@@ -66,7 +68,7 @@ Hercules4Mx.userSettings = {
     'autoHeadMix': false,
     // Enable automatically the headphone cue select (PFL) of the deck when a song is loaded. (Like in virtual-dj)
     'autoHeadcueOnLoad': true,
-    // Flashing at the rythm of the beat on the led. Use the Leds map above.
+    // Flashing at the rhythm of the beat on the led. Use the Leds map above.
     // Note: if using sync button, then the button will not show sync master state.
     'beatFlashLed': Hercules4Mx.Leds.none,
     // Simulate vuMeters using the kill and source buttons. If enabled, shows master vus, or deck vu depending if prefader listen button is enabled or not.
@@ -93,7 +95,10 @@ Hercules4Mx.userSettings = {
     // mixxx20 : As they were initially defined with the release of Mixxx 2.0
     // mixxx21 : AS they were defined with the release of Mixxx 2.1
     // With a little caution, you can modify them at the bottom of this file
-    'FXbuttonsSetup': 'mixxx21'
+    'FXbuttonsSetup': 'mixxx21',
+    // This allows to use the left jog wheel in place of the right jog wheel when pressing the right jog wheel.
+    // I implemented this to overcome the failure of the right jog wheel on my controller.
+    'useSingleJogWheelHack': false
 };
 
 //
@@ -109,6 +114,8 @@ Hercules4Mx.userSettings = {
 ////////////////////////////////////////////////////////////////////////
 // --- Internal variables ----
 Hercules4Mx.debuglog = false;
+Hercules4Mx.swapJogWheel = false;
+Hercules4Mx.rightJogWheelGroup = "[Channel2]";
 
 Hercules4Mx.navigationStatus = {
     //Navigation direction 1 up, -1 down, 0 do not move
@@ -226,7 +233,7 @@ Hercules4Mx.pitchMsbValue = [0x40, 0x40, 0x40, 0x40];
 //Default action for the action map.
 Hercules4Mx.noActionButtonMap = {
     //Action to do when pressed
-    'buttonPressAction': Hercules4Mx.FxActionNoOp,
+    'buttonPressAction': null, //This needs to be setup at the end, once the function is defined
     //Action to do when released
     'buttonReleaseAction': null,
     //Additional information, if needed
@@ -341,7 +348,8 @@ Hercules4Mx.init = function(id, debugging) {
 //timer-called (delayed) setup.
 Hercules4Mx.doDelayedSetup = function() {
     var i;
-    // Activate soft takeover for the relevant controls. Important: Previous to 2.1, engine.softTakeover only works when scripted with setValue !!
+    // Activate soft takeover for the relevant controls.
+    // Important: Previous to 2.1, engine.softTakeover only works when scripted with setValue!!
     for (i = 1; i <= 4; i++) {
         engine.softTakeover("[Channel" + i + "]", "rate", true);
         engine.softTakeover("[Channel" + i + "]", "volume", true);
@@ -491,10 +499,13 @@ Hercules4Mx.onLoopStateChange = function(value, group, control) {
 };
 //A change in an effect channel status has happened
 Hercules4Mx.onEffectStateChange = function(value, group, control) {
-    var fxidx = parseInt(group.slice(-2).substr(0, 1)); // "[EffectRack1_EffectUnit1]"
+    var fxidx = parseInt(group.slice(-2).substr(0, 1)); // "[EffectRack1_EffectUnit1_Effect1]"
     if (fxidx > 0 && fxidx <= Hercules4Mx.FxLedIdx.length) {
         var newval = (value > 0) ? 0x7F : 0x0;
+        /* old 2.0 behaviour
         var deck = parseInt(control.slice(-9).substr(0, 1)); // "group_[Channel1]_enable"
+        */
+        var deck = parseInt(group.slice(-10).substr(0, 1));
         var messageto = (deck === 1 || deck === 2) ? Hercules4Mx.NOnC1 : Hercules4Mx.NOnC2;
         var offset = (deck === 1 || deck === 3) ? 0x00 : 0x20;
         midi.sendShortMsg(messageto, Hercules4Mx.FxLedIdx[fxidx - 1] + offset, newval);
@@ -544,7 +555,7 @@ Hercules4Mx.onAutoDJ = function(value, group, control) {
     midi.sendShortMsg(Hercules4Mx.NOnC1, 0x3C, (value) ? 0x7F : 0x00);
 };
 
-// AutoDJ fade to next is pressed. (seems it isn't called when the fading is triggered 
+// AutoDJ fade to next is pressed. (seems it isn't called when the fading is triggered
 // automatically by AutoDJ compared to pressing the button in Mixxx/controller)
 Hercules4Mx.onAutoDJFade = function(value, group, control) {
     //Flashing led to indicate fading
@@ -755,7 +766,7 @@ Hercules4Mx.stopButton = function(midichan, control, value, status, groupInitial
 //Play button is pressed in a deck.
 Hercules4Mx.playButton = function(midichan, control, value, status, groupInitial) {
     var group = (Hercules4Mx.previewOnDeck[groupInitial] === true) ? '[PreviewDeck1]' : groupInitial;
-   
+
     if (Hercules4Mx.shiftStatus.pressed || Hercules4Mx.shiftStatus.reversing) { //Shifting: Do backward playback effect.
         if (engine.getValue(group, "slip_enabled") !== 0) {
             engine.setValue(group, "reverseroll", (value) ? 1 : 0);
@@ -772,7 +783,7 @@ Hercules4Mx.playButton = function(midichan, control, value, status, groupInitial
 // Forward button is pressed in a deck.
 Hercules4Mx.forwardButton = function(midichan, control, value, status, groupInitial) {
     var group = (Hercules4Mx.previewOnDeck[groupInitial] === true) ? '[PreviewDeck1]' : groupInitial;
-    
+
     if (Hercules4Mx.shiftStatus.pressed) { //Shifting: Jump 1 beat forward.
         if (value) {
             engine.setValue(group, "beatjump_1_forward", 1);
@@ -1048,7 +1059,7 @@ Hercules4Mx.doSyncHoldAction = function() {
     Hercules4Mx.syncEnabledStatus.triggered = 1;
 };
 
-//Advanced navigation mode. 
+//Advanced navigation mode.
 Hercules4Mx.navigationFiles = function(midichan, control, value, status, group) {
     if (value) {
         if (Hercules4Mx.navigationStatus.sidebar === false &&
@@ -1163,8 +1174,8 @@ Hercules4Mx.effectKnob = function(midichan, control, value, status, group) {
         engine.setValue(fxGroup, "loop_move", direction);
         Hercules4Mx.editModeStatus.used = true;
     } else if (Hercules4Mx.editModeStatus.mode === Hercules4Mx.editModes.effectknob) {
-        fxGroup = "[EffectRack1_EffectUnit" + Hercules4Mx.editModeStatus.effect + "]";
-        engine.setParameter(fxGroup, "super1", engine.getParameter(fxGroup, "super1") + step * direction);
+        fxGroup = "[EffectRack1_EffectUnit" + group.slice(-3).substr(0, 1) + "_Effect" + Hercules4Mx.editModeStatus.effect + "]";
+        engine.setParameter(fxGroup, "meta", engine.getParameter(fxGroup, "meta") + step * direction);
         Hercules4Mx.editModeStatus.used = true;
     } else if (Hercules4Mx.editModeStatus.mode === Hercules4Mx.editModes.beatgrid) {
         var Fxgroup = "[Channel" + group.slice(-3).substr(0, 1) + "]";
@@ -1227,8 +1238,8 @@ Hercules4Mx.FxSwitchUp = function(group, fxbutton, value, extraparam) {
     }
     if (Hercules4Mx.editModeStatus.used === false) {
         var deck = script.deckFromGroup(group);
-        var state = engine.getParameter("[EffectRack1_EffectUnit" + extraparam + "]", "group_[Channel" + deck + "]_enable");
-        engine.setParameter("[EffectRack1_EffectUnit" + extraparam + "]", "group_[Channel" + deck + "]_enable", !state);
+        var state = engine.getParameter("[EffectRack1_EffectUnit" + deck + "_Effect" + extraparam + "]", "enabled");
+        engine.setParameter("[EffectRack1_EffectUnit" + deck + "_Effect" + extraparam + "]", "enabled", !state);
     }
     Hercules4Mx.deactivateEditModeAction();
 };
@@ -1254,16 +1265,16 @@ Hercules4Mx.FxSamplerPush = function(group, fxbutton, value, extraparam) {
     }
 };
 /*
- button 1: loop start and loop editing functionality -> 
+ button 1: loop start and loop editing functionality ->
         loop enabled and is not one of the two preconfigured: button led is on
-        click: sets loop start (all 6 buttons start blinking). 
+        click: sets loop start (all 6 buttons start blinking).
             If loop was already enabled, moves the start to the current position but does not disable the playing loop
         click again on button 1: forget start pos (discard loop) (stops blinking and no led is on).
         click on button 2: set loop end and enable looping (stops blinking and sets led on buttons 1 and 2 to on).
         click on any of the other 4 buttons: set loop to 2, 8, 16, 32 beats (user configurable)(stops blinking and sets led on button 1 to on).
         click with shift pressed:  Same as clic, but this will be a rolling loop
         click when a loop is present and active: release loop
-        button held down while loop is active and move knob: double or halve the loop. 
+        button held down while loop is active and move knob: double or halve the loop.
         If the knob is moved while the loop edit mode is active, then move the loop forward or backward.
 
  button 2: loop end, reloop functionality ->
@@ -1366,7 +1377,7 @@ Hercules4Mx.LoopButtonPush = function(group, fxbutton, value, extraparam) {
 };
 
 // Any of the FX buttons has been pressed
-// There are 6 physical buttons present per deck, and also a "shift" button used by the controller 
+// There are 6 physical buttons present per deck, and also a "shift" button used by the controller
 // itself to switch between messages 1 to 6 and messages 7 to 12, depending if it is enabled or not.
 // Since the shift button also sends a message when it is pressed and when it is released,
 // I've been able to setup up to 24 different actions per deck.
@@ -1393,6 +1404,10 @@ Hercules4Mx.FXButton = function(midichan, control, value, status, groupInitial) 
             Hercules4Mx.deactivateEditModeAction();
         }
     } else if (value) {
+        if (Hercules4Mx.debuglog === true) {
+            engine.log(JSON.stringify(mapping));
+            engine.log(JSON.stringify(Hercules4Mx.noActionButtonMap));
+        }
         mapping.buttonPressAction(group, fxbutton, 1, mapping.extraParameter);
     } else if (mapping.buttonReleaseAction !== null) {
         mapping.buttonReleaseAction(group, fxbutton, 0, mapping.extraParameter);
@@ -1413,6 +1428,10 @@ Hercules4Mx.jogWheel = function(midichan, control, value, status, groupInitial) 
         Hercules4Mx.doNavigateAction();
     } else {
         var group = (Hercules4Mx.previewOnDeck[groupInitial]) ? '[PreviewDeck1]' : groupInitial;
+        if (Hercules4Mx.userSettings.useSingleJogWheelHack === true
+                && Hercules4Mx.swapJogWheel === true) {
+            group = Hercules4Mx.rightJogWheelGroup;
+        }
         engine.setValue(group, "jog", direction + engine.getValue(group, "jog"));
     }
 };
@@ -1452,6 +1471,7 @@ Hercules4Mx.wheelTouch = function(midichan, control, value, status, groupInitial
             // If button up
             engine.scratchDisable(script.deckFromGroup(group));
         }
+        Hercules4Mx.swapJogWheel = (value > 0);
     }
 };
 //Jog wheel used with pressure (for scratching)
@@ -1463,7 +1483,7 @@ Hercules4Mx.scratchWheel = function(midichan, control, value, status, groupIniti
     } else {
         //It has a speed sensor, but you have to move it really fast for it to send something different.
         var direction = (value < 0x40) ? value : value - 0x80;
-		var group = (Hercules4Mx.previewOnDeck[groupInitial]) ? '[PreviewDeck1]' : groupInitial;
+        var group = (Hercules4Mx.previewOnDeck[groupInitial]) ? '[PreviewDeck1]' : groupInitial;
         engine.scratchTick(script.deckFromGroup(group), direction);
     }
 };
@@ -1492,56 +1512,39 @@ Hercules4Mx.deckRateLsb = function(midichan, control, value, status, group) {
     }
 };
 
-//These are mapped with javascript so that engine.softTakeover can be enabled programatically.
-//If we could use the setParameter() method, we wouldn't need the 
-//absoluteNonLin or faderToVolume, but setParameter currently does not work with softTakeover.
-//TODO: Since version 2.1, setParameter works. Simplify the code.
 Hercules4Mx.deckGain = function(midichan, control, value, status, groupInitial) {
     var group = (Hercules4Mx.previewOnDeck[groupInitial] === true) ? '[PreviewDeck1]' : groupInitial;
-    engine.setValue(group, "pregain", script.absoluteNonLin(value, 0, 1, 4));
+    engine.setParameter(group, "pregain", script.absoluteLin(value,0,1));
 };
 Hercules4Mx.deckTreble = function(midichan, control, value, status, group) {
     //[EqualizerRack1_[Channel1]_Effect1]
     var groupChannel = "[Channel" + group.slice(-11).substr(0,1) + "]";
     if (Hercules4Mx.previewOnDeck[groupChannel] === false) {
-        engine.setValue(group, "parameter3", script.absoluteNonLin(value, 0, 1, 4));
+        engine.setParameter(group, "parameter3", script.absoluteLin(value,0,1));
     }
 };
 Hercules4Mx.deckMids = function(midichan, control, value, status, group) {
     //[EqualizerRack1_[Channel1]_Effect1]
     var groupChannel = "[Channel" + group.slice(-11).substr(0,1) + "]";
     if (Hercules4Mx.previewOnDeck[groupChannel] === false) {
-        engine.setValue(group, "parameter2", script.absoluteNonLin(value, 0, 1, 4));
+        engine.setParameter(group, "parameter2", script.absoluteLin(value,0,1));
     }
 };
 Hercules4Mx.deckBass = function(midichan, control, value, status, group) {
     //[EqualizerRack1_[Channel1]_Effect1]
     var groupChannel = "[Channel" + group.slice(-11).substr(0,1) + "]";
     if (Hercules4Mx.previewOnDeck[groupChannel] === false) {
-        engine.setValue(group, "parameter1", script.absoluteNonLin(value, 0, 1, 4));
+        engine.setParameter(group, "parameter1", script.absoluteLin(value,0,1));
     }
 };
 Hercules4Mx.deckVolume = function(midichan, control, value, status, group) {
     if (Hercules4Mx.previewOnDeck[group] === false) {
-        engine.setValue(group, "volume", Hercules4Mx.faderToVolume(value));
-    }
-};
-// function to scale fader volume linearly in dB until the second-to-last line, and
-// do the rest linearly. 0dBFs -6dbFs, -12dbFs,-18dbFs, -inf). Just like what the UI does.
-// Neither the script.absoluteLin nor script.absoluteNonLin can do this.
-Hercules4Mx.faderToVolume = function (value) {
-    var lowerval = 32; //(1/4th of 127)
-    var lowerdb = 0.125; //(1/4th of 1)
-    if (value < lowerval) {
-        return value*lowerdb/lowerval;
-    } else {
-        var dbs = -(127-value)*6/32;
-		return Math.pow(10.0,dbs/20.0);
+        engine.setParameter(group, "volume", script.absoluteLin(value,0,1));
     }
 };
 
 Hercules4Mx.crossfader = function(midichan, control, value, status, group) {
-    engine.setValue(group, "crossfader", script.absoluteLin(value, -1, 1));
+    engine.setParameter(group, "crossfader", script.absoluteLin(value,0,1));
 };
 
 Hercules4Mx.deckheadphones = function(midichan, control, value, status, group) {
@@ -1575,6 +1578,7 @@ Hercules4Mx.deckCStateChange = function(midichan, control, value, status, group)
 Hercules4Mx.deckDStateChange = function(midichan, control, value, status, group) {
     Hercules4Mx.VuMeterR.midichan = (value > 0) ? 0x91 : 0x90;
     Hercules4Mx.updateVumeterSourceAction(Hercules4Mx.VuMeterR, (value > 0) ? 4 : 2);
+    Hercules4Mx.rightJogWheelGroup = (value > 0) ? "[Channel4]" : "[Channel2]";
 };
 
 // Internal select what data is sent to the vumeter
@@ -1620,6 +1624,8 @@ Hercules4Mx.getNewDestinationChannel = function(chan) {
 // FX button presets configuration.
 Hercules4Mx.reinitButtonsMap = function() {
     Hercules4Mx.buttonMappings = Hercules4Mx.buttonMappings.slice(Hercules4Mx.buttonMappings.length);
+    //This is setup here because the function is undefined when the map is defined.
+    Hercules4Mx.noActionButtonMap.buttonPressAction = Hercules4Mx.FxActionNoOp;
 };
 Hercules4Mx.mapNewButton = function(pushAction, releaseAction, extraParameter, signalLed) {
     var i;
@@ -1645,18 +1651,15 @@ Hercules4Mx.mapNewButton = function(pushAction, releaseAction, extraParameter, s
         if (pushAction === Hercules4Mx.FxSamplerPush) {
             var curlen = Hercules4Mx.buttonMappings.length;
             Hercules4Mx.samplerLedIdx.push(curlen);
-            Hercules4Mx.samplerLedIdx.push(0x20 + curlen);
 
             engine.connectControl("[Sampler" + extraParameter + "]", "play_indicator", "Hercules4Mx.onSamplerStateChange");
-            engine.connectControl("[Sampler" + (2 + parseInt(extraParameter)) + "]", "play_indicator", "Hercules4Mx.onSamplerStateChange");
             engine.trigger("[Sampler" + extraParameter + "]", "play_indicator");
-            engine.trigger("[Sampler" + (2 + parseInt(extraParameter)) + "]", "play_indicator");
         }
         if (pushAction === Hercules4Mx.FxSwitchDown) {
             Hercules4Mx.FxLedIdx.push(Hercules4Mx.buttonMappings.length);
             for (i = 1; i <= 4; i++) {
-                engine.connectControl("[EffectRack1_EffectUnit" + extraParameter + "]", "group_[Channel" + i + "]_enable", "Hercules4Mx.onEffectStateChange");
-                engine.trigger("[EffectRack1_EffectUnit" + extraParameter + "]", "group_[Channel" + i + "]_enable");
+                engine.connectControl("[EffectRack1_EffectUnit" + i + "_Effect" + extraParameter + "]", "enabled", "Hercules4Mx.onEffectStateChange");
+                engine.trigger("[EffectRack1_EffectUnit" + i + "_Effect" + extraParameter + "]", "enabled");
             }
         }
     }
@@ -1670,6 +1673,15 @@ Hercules4Mx.completeButtonsMap = function() {
         for (var i = 1; i <= 4; i++) {
             engine.trigger("[Channel" + i + "]", "loop_enabled");
         }
+    }
+    var newArrayIdx = Hercules4Mx.samplerLedIdx.slice();
+    // Complete the sampler mapping. This allows to duplicate the number of samplers, since Deck 1 and Deck 2 effect buttons
+    // activate different samplers instead of the same ones.
+    for (var i = 0; i < newArrayIdx.length; i++) {
+        Hercules4Mx.samplerLedIdx.push(0x20 + newArrayIdx[i]);
+        var extraParameter = Hercules4Mx.buttonMappings[newArrayIdx[i] -1].extraParameter;
+        engine.connectControl("[Sampler" + (newArrayIdx.length + parseInt(extraParameter)) + "]", "play_indicator", "Hercules4Mx.onSamplerStateChange");
+        engine.trigger("[Sampler" + (newArrayIdx.length + parseInt(extraParameter)) + "]", "play_indicator");
     }
 };
 
@@ -1779,4 +1791,3 @@ Hercules4Mx.setupFXButtonsCustomMixx21 = function() {
     Hercules4Mx.beatLoopEditButtons.push("beatloop_8_toggle"); // loop edit mode, button 5
     Hercules4Mx.beatLoopEditButtons.push("beatloop_32_toggle"); // loop edit mode, button 6
 };
-

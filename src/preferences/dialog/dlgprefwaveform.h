@@ -18,9 +18,9 @@ class DlgPrefWaveform : public DlgPreferencePage, public Ui::DlgPrefWaveformDlg 
     virtual ~DlgPrefWaveform();
 
   public slots:
-    void slotUpdate();
-    void slotApply();
-    void slotResetToDefaults();
+    void slotUpdate() override;
+    void slotApply() override;
+    void slotResetToDefaults() override;
     void slotSetWaveformEndRender(int endTime);
 
   private slots:
@@ -36,7 +36,8 @@ class DlgPrefWaveform : public DlgPreferencePage, public Ui::DlgPrefWaveformDlg 
     void slotSetNormalizeOverview(bool normalize);
     void slotWaveformMeasured(float frameRate, int droppedFrames);
     void slotClearCachedWaveforms();
-    void slotSetGridLines(bool displayGrid);
+    void slotSetBeatGridAlpha(int alpha);
+    void slotSetPlayMarkerPosition(int position);
 
   private:
     void initWaveformControl();

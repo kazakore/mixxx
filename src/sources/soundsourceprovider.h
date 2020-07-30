@@ -26,8 +26,8 @@ enum class SoundSourceProviderPriority {
 // The implementation of a SoundSourceProvider must be thread-safe, because
 // a single instance might be accessed concurrently from different threads.
 class SoundSourceProvider {
-public:
-    virtual ~SoundSourceProvider() {}
+  public:
+    virtual ~SoundSourceProvider() = default;
 
     // A user-readable name that identifies this provider.
     virtual QString getName() const = 0;

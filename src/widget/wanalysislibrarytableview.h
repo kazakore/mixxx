@@ -6,17 +6,15 @@
 #include "preferences/usersettings.h"
 #include "widget/wtracktableview.h"
 
-class TrackCollection;
+class WAnalysisLibraryTableView : public WTrackTableView {
+  public:
+    WAnalysisLibraryTableView(
+            QWidget* parent,
+            UserSettingsPointer pConfig,
+            TrackCollectionManager* pTrackCollectionManager,
+            double trackTableBackgroundColorOpacity);
 
-class WAnalysisLibraryTableView : public WTrackTableView
-{
-    public:
-        WAnalysisLibraryTableView(QWidget* parent, UserSettingsPointer pConfig,
-                                 TrackCollection* pTrackCollection);
-
-        virtual void onSearchStarting();
-        virtual void onSearchCleared();
-        void onSearch(const QString& text) override;
+    void onSearch(const QString& text) override;
 };
 
 #endif

@@ -21,10 +21,10 @@ class EncoderCallback;
 
 class EncoderVorbis : public Encoder {
   public:
-    static const int MONO_BITRATE_TRESHOLD;
-  
-    EncoderVorbis(EncoderCallback* pCallback=nullptr);
-    virtual ~EncoderVorbis();
+    static const int MONO_BITRATE_THRESHOLD;
+
+    EncoderVorbis(EncoderCallback* pCallback = nullptr);
+    ~EncoderVorbis() override;
 
     int initEncoder(int samplerate, QString errorMessage) override;
     void encodeBuffer(const CSAMPLE *samples, const int size) override;

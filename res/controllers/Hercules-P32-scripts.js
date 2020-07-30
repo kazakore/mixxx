@@ -14,6 +14,8 @@ var loopEnabledDot = false;
 // Assign samplers on left side of the controller to left side of the crossfader
 // and samplers on right side of the controller to the right side of the crossfader
 var samplerCrossfaderAssign = true;
+// Toggle effect units between 1 & 3 on left and 2 & 4 on right when toggling decks
+var toggleEffectUnitsWithDecks = false;
 
 /**
  * Hercules P32 DJ controller script for Mixxx 2.1
@@ -26,12 +28,12 @@ var samplerCrossfaderAssign = true;
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation; either version 2
  * of the License, or (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
@@ -112,6 +114,9 @@ P32.slipButton = new components.Button({
             // reconnecting the output works.
             P32.leftDeck.pfl.unshift();
             P32.leftDeck.toggle();
+            if (toggleEffectUnitsWithDecks) {
+                P32.leftDeck.effectUnit.toggle();
+            }
             this.pressedToToggleDeck = true;
         } else if (P32.rightDeck.isShifted && value === 127) {
             // PFL button is controlling effect unit assignment to headphones while
@@ -119,6 +124,9 @@ P32.slipButton = new components.Button({
             // reconnecting the output works.
             P32.rightDeck.pfl.unshift();
             P32.rightDeck.toggle();
+            if (toggleEffectUnitsWithDecks) {
+                P32.rightDeck.effectUnit.toggle();
+            }
             this.pressedToToggleDeck = true;
         } else {
             if (this.pressedToToggleDeck && value === 0) {
@@ -133,7 +141,7 @@ P32.slipButton = new components.Button({
     connect: function () {
         for (var d = 1; d <= 4; d++) {
             this.connections.push(
-                engine.connectControl('[Channel' + d + ']', 'slip_enabled', this.output)
+                engine.connectControl('[Channel' + d + ']', 'slip_enabled', this.output.bind(this))
             );
         }
     },
@@ -214,9 +222,9 @@ P32.Deck = function (deckNumbers, channel) {
             };
         },
         connect: function () {
-            this.connections[0] = engine.connectControl(this.group, 'beatloop_size', this.output);
+            this.connections[0] = engine.connectControl(this.group, 'beatloop_size', this.output.bind(this));
             if (loopEnabledDot) {
-                this.connections[1] = engine.connectControl(this.group, 'loop_enabled', this.output);
+                this.connections[1] = engine.connectControl(this.group, 'loop_enabled', this.output.bind(this));
             }
         },
         output: function (value, group, control) {

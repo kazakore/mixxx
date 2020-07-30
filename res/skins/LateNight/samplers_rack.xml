@@ -1,0 +1,38 @@
+<Template>
+  <SetVariable name="BtnType"><Variable name="SubRegion_BtnType"/></SetVariable>
+
+  <Template src="skin:/samplers/singletons.xml"/>
+
+  <WidgetGroup>
+    <Layout>horizontal</Layout>
+    <SizePolicy>me,max</SizePolicy>
+    <Children>
+
+      <WidgetGroup><Size>0min,0min</Size></WidgetGroup>
+
+      <WidgetGroup>
+        <Layout>horizontal</Layout>
+        <Children>
+          <WidgetStack currentpage="[Skin],8_samplers">
+            <Children>
+
+              <!--only 4 Sampler but big -->
+              <Template src="skin:/samplers/samplers_4decks.xml"/>
+
+              <!--8 Sampler -->
+              <Template trigger="[Skin],8_samplers" on_hide_select="0" src="skin:/samplers/samplers_8decks.xml"/>
+
+            </Children>
+          </WidgetStack>
+        </Children>
+      </WidgetGroup>
+
+      <WidgetGroup><Size>0min,0min</Size></WidgetGroup>
+
+    </Children>
+    <Connection>
+      <ConfigKey>[Samplers],show_samplers</ConfigKey>
+      <BindProperty>visible</BindProperty>
+    </Connection>
+  </WidgetGroup>
+</Template>

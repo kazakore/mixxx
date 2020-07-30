@@ -10,9 +10,10 @@ class PreviewDeck : public BaseTrackPlayerImpl {
                 UserSettingsPointer pConfig,
                 EngineMaster* pMixingEngine,
                 EffectsManager* pEffectsManager,
+                VisualsManager* pVisualsManager,
                 EngineChannel::ChannelOrientation defaultOrientation,
                 QString group);
-    virtual ~PreviewDeck();
+    ~PreviewDeck() override = default;
 };
 
 #endif /* MIXER_PREVIEWDECK_H */

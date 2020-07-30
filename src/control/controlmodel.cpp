@@ -21,8 +21,7 @@ void ControlModel::addControl(const ConfigKey& key,
     info.key = key;
     info.title = title;
     info.description = description;
-    info.pControl = new ControlProxy(this);
-    info.pControl->initialize(info.key);
+    info.pControl = new ControlProxy(info.key, this);
 
     beginInsertRows(QModelIndex(), m_controls.size(),
                     m_controls.size());
@@ -59,7 +58,6 @@ QVariant ControlModel::data(const QModelIndex& index,
     }
 
     const ControlInfo& control = m_controls.at(row);
-    QString value;
     switch (column) {
         case CONTROL_COLUMN_GROUP:
             return control.key.group;
@@ -74,7 +72,7 @@ QVariant ControlModel::data(const QModelIndex& index,
         case CONTROL_COLUMN_DESCRIPTION:
             return control.description;
         case CONTROL_COLUMN_FILTER:
-            return control.key.group + "," + control.key.item;
+            return QVariant(control.key.group % QStringLiteral(",") % control.key.item);
     }
     return QVariant();
 }
@@ -98,7 +96,7 @@ bool ControlModel::setHeaderData(int section,
     }
 
     m_headerInfo[section][role] = value;
-    emit(headerDataChanged(orientation, section, section));
+    emit headerDataChanged(orientation, section, section);
     return true;
 }
 

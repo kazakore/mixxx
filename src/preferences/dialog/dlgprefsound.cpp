@@ -30,11 +30,12 @@
  * all the controls to the values obtained from SoundManager.
  */
 DlgPrefSound::DlgPrefSound(QWidget* pParent, SoundManager* pSoundManager,
-                           PlayerManager* pPlayerManager, UserSettingsPointer pConfig)
+                           PlayerManager* pPlayerManager, UserSettingsPointer pSettings)
         : DlgPreferencePage(pParent),
           m_pSoundManager(pSoundManager),
           m_pPlayerManager(pPlayerManager),
-          m_pConfig(pConfig),
+          m_pSettings(pSettings),
+          m_config(pSoundManager),
           m_settingsModified(false),
           m_bLatencyChanged(false),
           m_bSkipConfigClear(true),
@@ -108,9 +109,9 @@ DlgPrefSound::DlgPrefSound(QWidget* pParent, SoundManager* pSoundManager,
             this, SLOT(boothDelaySpinboxChanged(double)));
 
     m_pMicMonitorMode = new ControlProxy("[Master]", "talkover_mix", this);
-    micMonitorModeComboBox->addItem(tr("Master output only"),
+    micMonitorModeComboBox->addItem(tr("Main output only"),
         QVariant(static_cast<int>(EngineMaster::MicMonitorMode::MASTER)));
-    micMonitorModeComboBox->addItem(tr("Master and booth outputs"),
+    micMonitorModeComboBox->addItem(tr("Main and booth outputs"),
         QVariant(static_cast<int>(EngineMaster::MicMonitorMode::MASTER_AND_BOOTH)));
     micMonitorModeComboBox->addItem(tr("Direct monitor (recording and broadcasting only)"),
         QVariant(static_cast<int>(EngineMaster::MicMonitorMode::DIRECT_MONITOR)));
@@ -152,10 +153,10 @@ DlgPrefSound::DlgPrefSound(QWidget* pParent, SoundManager* pSoundManager,
 
     m_pMasterAudioLatencyOverloadCount =
             new ControlProxy("[Master]", "audio_latency_overload_count", this);
-    m_pMasterAudioLatencyOverloadCount->connectValueChanged(SLOT(bufferUnderflow(double)));
+    m_pMasterAudioLatencyOverloadCount->connectValueChanged(this, &DlgPrefSound::bufferUnderflow);
 
     m_pMasterLatency = new ControlProxy("[Master]", "latency", this);
-    m_pMasterLatency->connectValueChanged(SLOT(masterLatencyChanged(double)));
+    m_pMasterLatency->connectValueChanged(this, &DlgPrefSound::masterLatencyChanged);
 
     // TODO: remove this option by automatically disabling/enabling the master mix
     // when recording, broadcasting, headphone, and master outputs are enabled/disabled
@@ -165,7 +166,7 @@ DlgPrefSound::DlgPrefSound(QWidget* pParent, SoundManager* pSoundManager,
     masterMixComboBox->setCurrentIndex(m_pMasterEnabled->get() ? 1 : 0);
     connect(masterMixComboBox, SIGNAL(currentIndexChanged(int)),
             this, SLOT(masterMixChanged(int)));
-    m_pMasterEnabled->connectValueChanged(SLOT(masterEnabledChanged(double)));
+    m_pMasterEnabled->connectValueChanged(this, &DlgPrefSound::masterEnabledChanged);
 
     m_pMasterMonoMixdown = new ControlProxy("[Master]", "mono_mixdown", this);
     masterOutputModeComboBox->addItem(tr("Stereo"));
@@ -173,7 +174,7 @@ DlgPrefSound::DlgPrefSound(QWidget* pParent, SoundManager* pSoundManager,
     masterOutputModeComboBox->setCurrentIndex(m_pMasterMonoMixdown->get() ? 1 : 0);
     connect(masterOutputModeComboBox, SIGNAL(currentIndexChanged(int)),
             this, SLOT(masterOutputModeComboBoxChanged(int)));
-    m_pMasterMonoMixdown->connectValueChanged(SLOT(masterMonoMixdownChanged(double)));
+    m_pMasterMonoMixdown->connectValueChanged(this, &DlgPrefSound::masterMonoMixdownChanged);
 
     m_pKeylockEngine =
             new ControlProxy("[Master]", "keylock_engine", this);
@@ -189,14 +190,45 @@ DlgPrefSound::DlgPrefSound(QWidget* pParent, SoundManager* pSoundManager,
     // the limits warning is a Linux only thing
     limitsHint->hide();
 #endif // __LINUX__
+
+    // Set the focus policy for QComboBoxes (and wide QDoubleSpinBoxes) and
+    // connect them to the custom event filter below so they don't accept focus
+    // when we scroll the preferences page.
+    QObjectList objList = this->children();
+    for (int i = 0; i < objList.length(); ++i) {
+        QComboBox* combo = qobject_cast<QComboBox*>(objList[i]);
+        QDoubleSpinBox* spin = qobject_cast<QDoubleSpinBox*>(objList[i]);
+        if (combo) {
+            combo->setFocusPolicy(Qt::StrongFocus);
+            combo->installEventFilter(this);
+        } else if (spin) {
+            spin->setFocusPolicy(Qt::StrongFocus);
+            spin->installEventFilter(this);
+        }
+    }
 }
 
 DlgPrefSound::~DlgPrefSound() {
     delete m_pLatencyCompensation;
 }
 
+// Catch scroll events over comboboxes and pass them to the scroll area instead.
+bool DlgPrefSound::eventFilter(QObject* obj, QEvent* e) {
+    if (e->type() == QEvent::Wheel) {
+        // Reject scrolling only if widget is unfocused.
+        // Object to widget cast is needed to check the focus state.
+        QComboBox* combo = qobject_cast<QComboBox*>(obj);
+        QDoubleSpinBox* spin = qobject_cast<QDoubleSpinBox*>(obj);
+        if ((combo && !combo->hasFocus()) || (spin && !spin->hasFocus())) {
+            QApplication::sendEvent(verticalLayout_2, e);
+            return true;
+        }
+    }
+    return QObject::eventFilter(obj, e);
+}
+
 /**
- * Slot called when the preferences dialog  is opened or this pane is
+ * Slot called when the preferences dialog is opened or this pane is
  * selected.
  */
 void DlgPrefSound::slotUpdate() {
@@ -204,11 +236,11 @@ void DlgPrefSound::slotUpdate() {
     // we change to this pane, we lose changed and unapplied settings
     // every time. There's no real way around this, just another argument
     // for a prefs rewrite -- bkgood
-    m_settingsModified = false;
     m_bSkipConfigClear = true;
     loadSettings();
     checkLatencyCompensation();
     m_bSkipConfigClear = false;
+    m_settingsModified = false;
 }
 
 /**
@@ -221,13 +253,13 @@ void DlgPrefSound::slotApply() {
 
     m_config.clearInputs();
     m_config.clearOutputs();
-    emit(writePaths(&m_config));
+    emit writePaths(&m_config);
 
     SoundDeviceError err = SOUNDDEVICE_ERROR_OK;
     {
         ScopedWaitCursor cursor;
         m_pKeylockEngine->set(keylockComboBox->currentIndex());
-        m_pConfig->set(ConfigKey("[Master]", "keylock_engine"),
+        m_pSettings->set(ConfigKey("[Master]", "keylock_engine"),
                        ConfigValue(keylockComboBox->currentIndex()));
 
         err = m_pSoundManager->setConfig(m_config);
@@ -243,6 +275,10 @@ void DlgPrefSound::slotApply() {
     loadSettings(); // in case SM decided to change anything it didn't like
     checkLatencyCompensation();
     m_bSkipConfigClear = false;
+}
+
+QUrl DlgPrefSound::helpUrl() const {
+    return QUrl(MIXXX_MANUAL_SOUND_URL);
 }
 
 /**
@@ -413,18 +449,18 @@ void DlgPrefSound::loadSettings(const SoundManagerConfig &config) {
     }
 
     // Default keylock is Rubberband.
-    int keylock_engine = m_pConfig->getValue(
+    int keylock_engine = m_pSettings->getValue(
             ConfigKey("[Master]", "keylock_engine"), 1);
     keylockComboBox->setCurrentIndex(keylock_engine);
 
     m_loading = false;
-    // DlgPrefSoundItem has it's own inhibit flag 
-    emit(loadPaths(m_config));
+    // DlgPrefSoundItem has it's own inhibit flag
+    emit loadPaths(m_config);
 }
 
 /**
  * Slot called when the user selects a different API, or the
- * software changes it programatically (for instance, when it
+ * software changes it programmatically (for instance, when it
  * loads a value from SoundManager). Refreshes the device lists
  * for the new API and pushes those to the path items.
  */
@@ -451,7 +487,7 @@ void DlgPrefSound::apiChanged(int index) {
  */
 void DlgPrefSound::updateAPIs() {
     QString currentAPI(apiComboBox->itemData(apiComboBox->currentIndex()).toString());
-    emit(updatingAPI());
+    emit updatingAPI();
     while (apiComboBox->count() > 1) {
         apiComboBox->removeItem(apiComboBox->count() - 1);
     }
@@ -462,7 +498,7 @@ void DlgPrefSound::updateAPIs() {
     if (newIndex > -1) {
         apiComboBox->setCurrentIndex(newIndex);
     }
-    emit(updatedAPI());
+    emit updatedAPI();
 }
 
 /**
@@ -557,8 +593,8 @@ void DlgPrefSound::refreshDevices() {
         m_inputDevices =
             m_pSoundManager->getDeviceList(m_config.getAPI(), false, true);
     }
-    emit(refreshOutputDevices(m_outputDevices));
-    emit(refreshInputDevices(m_inputDevices));
+    emit refreshOutputDevices(m_outputDevices);
+    emit refreshInputDevices(m_inputDevices);
 }
 
 /**
@@ -590,7 +626,7 @@ void DlgPrefSound::queryClicked() {
  * Slot called when the "Reset to Defaults" button is clicked.
  */
 void DlgPrefSound::slotResetToDefaults() {
-    SoundManagerConfig newConfig;
+    SoundManagerConfig newConfig(m_pSoundManager);
     newConfig.loadDefaults(m_pSoundManager, SoundManagerConfig::ALL);
     loadSettings(newConfig);
     keylockComboBox->setCurrentIndex(EngineBuffer::RUBBERBAND);
@@ -685,7 +721,7 @@ void DlgPrefSound::checkLatencyCompensation() {
         m_config.clearOutputs();
     }
 
-    emit(writePaths(&m_config));
+    emit writePaths(&m_config);
 
     if (m_config.hasMicInputs() && !m_config.hasExternalRecordBroadcast()) {
         micMonitorModeComboBox->setEnabled(true);
